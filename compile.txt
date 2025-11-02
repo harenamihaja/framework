@@ -1,0 +1,5 @@
+javac -cp "lib/*" -d out src\main\java\com\monframework\*.java src\main\java\com\monframework\controllers\*.java src\main\java\com\monframework\annotations\*.java
+
+
+java -cp "out;lib/*" com.monframework.ControllerScanner
+

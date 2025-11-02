@@ -4,7 +4,7 @@ setlocal
 :: ==============================
 :: Variables principales
 :: ==============================
-set "root=E:\studiesITU\S5\MrNaina\framework_git"
+set "root=E:\studiesITU\S5\MrNaina\framework"
 set "framework=framework"
 set "web=web"
 set "tomcat_dir=C:\tomcat-10.1.28-windows-x64\apache-tomcat-10.1.28"

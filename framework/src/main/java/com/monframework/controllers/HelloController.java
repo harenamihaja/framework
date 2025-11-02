@@ -1,9 +1,9 @@
 package com.monframework.controllers;
 
-import com.monframework.annotations.WebMapping;
+import com.monframework.annotations.UrlMapping;
 
 public class HelloController {
-    @WebMapping("/hello")
+    @UrlMapping(url = "/")
     public String sayHello() {
         return "Bonjour depuis le framework !";
     }
