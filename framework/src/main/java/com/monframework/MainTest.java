@@ -6,7 +6,6 @@ import java.lang.reflect.Method;
 
 public class MainTest {
 
-    // Méthodes annotées à tester
     @UrlMapping(url="/home")
     public void afficherAccueil() {
         System.out.println("Accueil affiché !");
@@ -32,7 +31,6 @@ public class MainTest {
                     System.out.println("Méthode trouvée : " + method.getName() + 
                                        " → URL : " + mapping.url());
 
-                    // Exécution facultative de la méthode (juste pour test)
                     method.invoke(testInstance);
                 }
             }
