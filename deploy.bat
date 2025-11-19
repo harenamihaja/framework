@@ -4,15 +4,15 @@ setlocal
 :: ==============================
 :: Variables principales
 :: ==============================
-set "root=E:\studiesITU\S5\MrNaina\framework"
-set "framework=framework"
+set "root=E:\ITU\s5\MrNaina\sprint\framework"
+set "framework=monframework"
 set "web=web"
-set "tomcat_dir=C:\tomcat-10.1.28-windows-x64\apache-tomcat-10.1.28"
+set "tomcat_dir=C:\apache-tomcat-10.1.28"
 set "war_name=framework"
 
 :: Forcer l'utilisation de Java 17
-set "JAVAC=C:\Program Files\Java\jdk-17\bin\javac.exe"
-set "JAR=C:\Program Files\Java\jdk-17\bin\jar.exe"
+set "JAVAC=C:\Program Files\Eclipse Adoptium\jdk-17.0.17.10-hotspot\bin\javac.exe"
+set "JAR=C:\Program Files\Eclipse Adoptium\jdk-17.0.17.10-hotspot\bin\jar.exe"
 
 :: ==============================
 :: 1) Compiler le framework et créer le jar
@@ -22,8 +22,11 @@ echo === Compilation du framework ===
 cd /d "%root%\%framework%"
 
 if not exist out mkdir out
+"%JAVAC%" -cp "lib/*" -d out src\main\java\com\monframework\annotations\*.java
+"%JAVAC%" -cp "lib/*;out" -d out src\main\java\com\monframework\controllers\*.java
+"%JAVAC%" -cp "lib/*;out" -d out src\main\java\com\monframework\scanner\*.java
+"%JAVAC%" -cp "lib/*;out" -d out src\main\java\com\monframework\*.java
 
-"%JAVAC%" -cp "lib/*" -d out src\main\java\com\monframework\*.java
 if %errorlevel% neq 0 (
     echo Erreur lors de la compilation du framework
     exit /b 1
@@ -48,12 +51,14 @@ mkdir build
 mkdir build\WEB-INF
 mkdir build\WEB-INF\classes
 mkdir build\WEB-INF\lib
+mkdir build\WEB-INF\classes\controller
 
 :: Copier le jar du framework dans WEB-INF/lib
 copy "%root%\%framework%\framework.jar" "build\WEB-INF\lib\" >nul
 
 :: Compiler les classes de la webapp
-"%JAVAC%" -cp "lib/*;build\WEB-INF\lib\*" -d build\WEB-INF\classes src\main\java\*.java
+"%JAVAC%" -cp "lib/*;build\WEB-INF\lib\*" -d build\WEB-INF\classes\ src\main\java\controller\*.java
+"%JAVAC%" -cp "lib/*;build\WEB-INF\lib\*;build\WEB-INF\classes\*;build\WEB-INF\classes\controller\*" -d build\WEB-INF\classes src\main\java\*.java
 if %errorlevel% neq 0 (
     echo Erreur lors de la compilation de la webapp
     exit /b 1
