@@ -1,5 +1,4 @@
-
-package com.monframework;
+package com.monframework.scanner;
 
 import com.monframework.annotations.Controller;
 import com.monframework.annotations.UrlMapping;
@@ -40,19 +39,21 @@ public class ControllerScanner {
         return controllers;
     }
 
-    public static void main(String[] args) {
-        List<Class<?>> controllers = getControllers("com.monframework.controllers");
+  
+    // Nouvelle fonction : récupère toutes les méthodes annotées @UrlMapping
+    public static List<Route> getRoutes(String packageName) {
+        List<Route> routes = new ArrayList<>();
+        List<Class<?>> controllers = getControllers(packageName);
 
         for (Class<?> controller : controllers) {
-            System.out.println("Contrôleur trouvé : " + controller.getName());
-
-            // Parcours des méthodes avec @UrlMapping
             for (Method method : controller.getDeclaredMethods()) {
                 if (method.isAnnotationPresent(UrlMapping.class)) {
                     UrlMapping mapping = method.getAnnotation(UrlMapping.class);
-                    System.out.println("   Méthode : " + method.getName() + " → URL : " + mapping.url());
+                    routes.add(new Route(mapping.url(), method, controller));
                 }
             }
         }
+
+        return routes;
     }
 }

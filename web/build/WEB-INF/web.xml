@@ -9,11 +9,18 @@
       <servlet>
         <servlet-name>FrontServlet</servlet-name>
         <servlet-class>com.monframework.FrontServlet</servlet-class>
+        <!-- Spécifier le package à scanner pour les controllers -->
+        <init-param>
+            <param-name>controllerPackage</param-name>
+            <param-value>controller</param-value>
+        </init-param>
+        
+        <load-on-startup>1</load-on-startup>
     </servlet>
 
     <servlet-mapping>
         <servlet-name>FrontServlet</servlet-name>
-        <url-pattern>/*</url-pattern>
+        <url-pattern>/</url-pattern>
     </servlet-mapping>
 
    
