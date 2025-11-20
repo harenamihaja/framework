@@ -1,4 +1,5 @@
 package controller;
+
 import com.monframework.annotations.Controller;
 import com.monframework.annotations.UrlMapping;
 
@@ -6,18 +7,22 @@ import com.monframework.annotations.UrlMapping;
 public class MainController {
 
     @UrlMapping(url = "/home")
-    public void afficherAccueil() {
+    public String afficherAccueil() {
         System.out.println(" Accueil affiché !");
+        return "<h1>Hello depuis la méthode Home !</h1>";
+
     }
 
     @UrlMapping(url = "/about")
-    public void afficherAPropos() {
+    public String afficherAPropos() {
         System.out.println("Page À propos affichée !");
+        return "<h1>Page À propos affichée !</h1>";
     }
 
     @UrlMapping(url = "/contact")
-    public void afficherContact() {
+    public String afficherContact() {
         System.out.println(" Page Contact affichée !");
+        return "<h1>Page Contact affichée !</h1>";
     }
 
     // Méthode sans annotation (ne sera pas détectée)
@@ -25,4 +30,3 @@ public class MainController {
         System.out.println("Cette méthode ne devrait pas apparaître dans la liste.");
     }
 }
-

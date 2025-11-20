@@ -22,28 +22,29 @@ public class FrontServlet extends HttpServlet {
     @Override
     public void init() throws ServletException {
         super.init();
-        
+
         // Scanner le package des controllers (à adapter selon votre structure)
         String controllerPackage = getInitParameter("controllerPackage");
         if (controllerPackage == null) {
             controllerPackage = "controller"; // Package par défaut
         }
-        
+
         System.out.println("=== Scanning package: " + controllerPackage + " ===");
-        
+
         // Récupérer toutes les routes
         List<Route> routes = ControllerScanner.getRoutes(controllerPackage);
-        
+
         // Stocker les routes dans une Map pour un accès rapide
         for (Route route : routes) {
             routeMap.put(route.getUrl(), route);
-            System.out.println("Route enregistrée: " + route.getUrl() + 
-                             " -> " + route.getController().getSimpleName() + 
-                             "." + route.getMethod().getName() + "()");
+            System.out.println("Route enregistrée: " + route.getUrl()
+                    + " -> " + route.getController().getSimpleName()
+                    + "." + route.getMethod().getName() + "()");
         }
-        
+
         System.out.println("=== " + routes.size() + " route(s) trouvée(s) ===");
     }
+
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         chercherRessource(req, resp);
@@ -109,6 +110,10 @@ public class FrontServlet extends HttpServlet {
             // Gérer le résultat
             resp.setContentType("text/html; charset=UTF-8");
             PrintWriter out = resp.getWriter();
+            if (result instanceof String) {
+                resp.getWriter().println((String) result);
+                //return;
+            }
 
             out.println("<html><body>");
             out.println("<h2>Route trouvée!</h2>");
