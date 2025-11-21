@@ -2,16 +2,35 @@ package controller;
 
 import com.monframework.annotations.Controller;
 import com.monframework.annotations.UrlMapping;
+import com.monframework.models.ModelView;
 
 @Controller
 public class MainController {
 
-    @UrlMapping(url = "/home")
-    public String afficherAccueil() {
-        System.out.println(" Accueil affiché !");
-        return "<h1>Hello depuis la méthode Home !</h1>";
+    // @UrlMapping(url = "/home")
+    // public String afficherAccueil() {
+    //     System.out.println(" Accueil affiché !");
+    //     return "<h1>Hello depuis la méthode Home !</h1>";
 
+    // }
+
+    @UrlMapping(url = "/home")
+    public ModelView afficherAccueil() {
+        ModelView mv = new ModelView();
+    //    mv.setView("/WEB-INF/views/home.jsp");
+        mv.setView("home.jsp");
+
+        return mv;
     }
+        @UrlMapping(url = "/test")
+    public ModelView afficherTest() {
+        ModelView mv = new ModelView();
+    //    mv.setView("/WEB-INF/views/home.jsp");
+        mv.setView("views/test.jsp");
+
+        return mv;
+    }
+
 
     @UrlMapping(url = "/about")
     public String afficherAPropos() {

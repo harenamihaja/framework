@@ -23,7 +23,7 @@ cd /d "%root%\%framework%"
 
 if not exist out mkdir out
 "%JAVAC%" -cp "lib/*" -d out src\main\java\com\monframework\annotations\*.java
-"%JAVAC%" -cp "lib/*;out" -d out src\main\java\com\monframework\controllers\*.java
+"%JAVAC%" -cp "lib/*;out" -d out src\main\java\com\monframework\models\*.java
 "%JAVAC%" -cp "lib/*;out" -d out src\main\java\com\monframework\scanner\*.java
 "%JAVAC%" -cp "lib/*;out" -d out src\main\java\com\monframework\*.java
 

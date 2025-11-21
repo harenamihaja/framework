@@ -9,6 +9,7 @@ import jakarta.servlet.RequestDispatcher;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
 import com.monframework.scanner.Route;
+import com.monframework.models.ModelView;
 import com.monframework.scanner.ControllerScanner;
 
 import java.util.HashMap;
@@ -96,43 +97,54 @@ public class FrontServlet extends HttpServlet {
 
     private void executerRoute(Route route, HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
-
         try {
-            // Créer une instance du controller
-            Object controllerInstance = route.getController().getDeclaredConstructor().newInstance();
-
-            // Récupérer la méthode
+            Object controller = route.getController().getDeclaredConstructor().newInstance();
             Method method = route.getMethod();
 
-            // Invoquer la méthode
-            Object result = method.invoke(controllerInstance);
+            Object result = method.invoke(controller);
 
-            // Gérer le résultat
-            resp.setContentType("text/html; charset=UTF-8");
-            PrintWriter out = resp.getWriter();
-            if (result instanceof String) {
-                resp.getWriter().println((String) result);
-                //return;
+            // === Cas 1 : La méthode retourne un ModelView ===
+            if (result instanceof ModelView mv) {
+                String view = mv.getView();
+
+                if (view == null || view.isEmpty()) {
+                    throw new ServletException("ModelView sans view définie.");
+                }
+
+                RequestDispatcher dispatcher = req.getRequestDispatcher(view);
+                dispatcher.forward(req, resp);
+                return;
             }
 
-            out.println("<html><body>");
-            out.println("<h2>Route trouvée!</h2>");
-            out.println("<p><b>URL:</b> " + route.getUrl() + "</p>");
-            out.println("<p><b>Controller:</b> " + route.getController().getSimpleName() + "</p>");
-            out.println("<p><b>Méthode:</b> " + route.getMethod().getName() + "()</p>");
-            out.println("<hr>");
-            out.println("<h3>Résultat:</h3>");
-            out.println("<p>" + (result != null ? result.toString() : "void") + "</p>");
-            out.println("</body></html>");
+            // === Cas 2 : La méthode retourne un String ===
+            if (result instanceof String) {
+                resp.setContentType("text/html; charset=UTF-8");
+                resp.getWriter().println((String) result);
+                return;
+            }
+
+            // === Cas 3 : Void ou type non supporté → erreur ===
+            if (result == null) {
+                throw new ServletException(
+                        "La méthode " + method.getName() + " retourne void. "
+                        + "Retour attendu : String ou ModelView."
+                );
+            }
+
+            // === Cas 4 : Type non autorisé ===
+            throw new ServletException(
+                    "Type de retour non supporté : " + result.getClass().getName()
+                    + ". Attendu : String ou ModelView."
+            );
 
         } catch (Exception e) {
-            resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            resp.setStatus(500);
             resp.setContentType("text/html; charset=UTF-8");
             PrintWriter out = resp.getWriter();
-            out.println("<h1>Erreur 500 - Erreur interne</h1>");
-            out.println("<p>Erreur lors de l'exécution du controller:</p>");
-            out.println("<pre>" + e.getMessage() + "</pre>");
+            out.println("<h1>Erreur Framework</h1>");
+            out.println("<p>" + e.getMessage() + "</p>");
             e.printStackTrace();
         }
     }
+
 }
