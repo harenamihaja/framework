@@ -1,6 +1,7 @@
 package controller;
 
 import com.monframework.annotations.Controller;
+import com.monframework.annotations.PathVariable;
 import com.monframework.annotations.UrlMapping;
 import com.monframework.models.ModelView;
 
@@ -27,6 +28,19 @@ public class MainController {
         //    mv.setView("/WEB-INF/views/home.jsp");
         mv.setView("views/test.jsp");
 
+        return mv;
+    }
+
+    @UrlMapping(url = "/employe/{id}")
+    public ModelView detailEmploye(@PathVariable("id") String id) {
+        ModelView mv = new ModelView("/views/employe-detail.jsp");
+        System.out.println("ato oooooooooooooooooo");
+        System.out.println("id  " + id);
+        // mv.addObject("nom", "Rakoto");
+        // mv.addObject("age", 30);
+        mv.addObject("id", id);  // Envoie l'id via addObject pour la vue
+
+        // Ajoutez de la logique ici si besoin, e.g., fetch data par id
         return mv;
     }
 

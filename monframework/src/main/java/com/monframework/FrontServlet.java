@@ -8,13 +8,17 @@ import java.io.IOException;
 import jakarta.servlet.RequestDispatcher;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import com.monframework.scanner.Route;
 import com.monframework.models.ModelView;
 import com.monframework.scanner.ControllerScanner;
+import com.monframework.annotations.PathVariable;  // Import the new annotation
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
 
 public class FrontServlet extends HttpServlet {
 
@@ -56,11 +60,30 @@ public class FrontServlet extends HttpServlet {
 
         String path = req.getRequestURI().substring(req.getContextPath().length());
 
-        // Vérifier si une route correspond à ce path
+        // Vérifier si une route correspond à ce path (pour routes statiques)
         if (routeMap.containsKey(path)) {
             Route route = routeMap.get(path);
             executerRoute(route, req, resp);
             return;
+        }
+
+        // Essayer de matcher les routes dynamiques
+        for (Route route : routeMap.values()) {
+            Matcher matcher = route.getPattern().matcher(path);
+
+            if (matcher.matches()) {
+                // Extraire les valeurs des paramètres dans une Map (nommés, e.g., "id" -> "123")
+                Map<String, String> paramMap = new HashMap<>();
+                List<String> paramNames = route.getParamNames();
+                for (int i = 0; i < paramNames.size(); i++) {
+                    paramMap.put(paramNames.get(i), matcher.group(i + 1));
+                }
+
+                req.setAttribute("routeParams", paramMap);
+
+                executerRoute(route, req, resp);
+                return;
+            }
         }
 
         // Si c'est la racine
@@ -100,12 +123,46 @@ public class FrontServlet extends HttpServlet {
         try {
             Object controller = route.getController().getDeclaredConstructor().newInstance();
             Method method = route.getMethod();
+            @SuppressWarnings("unchecked")
+            Map<String, String> paramMap = (Map<String, String>) req.getAttribute("routeParams");
 
-            Object result = method.invoke(controller);
+            Object result;
+            if (method.getParameterCount() == 0) {
+                result = method.invoke(controller);
+            } else {
+                // Préparer les arguments pour l'injection des @PathVariable
+                Parameter[] parameters = method.getParameters();
+                Object[] args = new Object[parameters.length];
+                for (int i = 0; i < parameters.length; i++) {
+                    PathVariable pv = parameters[i].getAnnotation(PathVariable.class);
+                    if (pv == null) {
+                        throw new ServletException("Paramètre non annoté avec @PathVariable");
+                    }
+                    String name = pv.value();
+                    if (name.isEmpty()) {
+                        name = parameters[i].getName();  // Nécessite compilation avec -parameters
+                    }
+                    String value = paramMap.get(name);
+                    if (value == null) {
+                        throw new ServletException("Valeur manquante pour @PathVariable '" + name + "'");
+                    }
+                    Class<?> type = parameters[i].getType();
+                    if (type == String.class) {
+                        args[i] = value;
+                    } else if (type == int.class || type == Integer.class) {
+                        args[i] = Integer.parseInt(value);
+                    } // Ajoutez d'autres types (e.g., long, double) si besoin
+                    else {
+                        throw new ServletException("Type non supporté pour @PathVariable: " + type.getName());
+                    }
+                }
+                result = method.invoke(controller, args);
+            }
 
             // === Cas 1 : La méthode retourne un ModelView ===
             if (result instanceof ModelView mv) {
                 String view = mv.getView();
+
                 for (Map.Entry<String, Object> entry : mv.getMapData().entrySet()) {
                     req.setAttribute(entry.getKey(), entry.getValue());
                 }
