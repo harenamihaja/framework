@@ -106,6 +106,9 @@ public class FrontServlet extends HttpServlet {
             // === Cas 1 : La méthode retourne un ModelView ===
             if (result instanceof ModelView mv) {
                 String view = mv.getView();
+                for (Map.Entry<String, Object> entry : mv.getMapData().entrySet()) {
+                    req.setAttribute(entry.getKey(), entry.getValue());
+                }
 
                 if (view == null || view.isEmpty()) {
                     throw new ServletException("ModelView sans view définie.");
