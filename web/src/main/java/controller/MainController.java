@@ -11,26 +11,33 @@ public class MainController {
     // public String afficherAccueil() {
     //     System.out.println(" Accueil affiché !");
     //     return "<h1>Hello depuis la méthode Home !</h1>";
-
     // }
-
     @UrlMapping(url = "/home")
     public ModelView afficherAccueil() {
         ModelView mv = new ModelView();
-    //    mv.setView("/WEB-INF/views/home.jsp");
+        //    mv.setView("/WEB-INF/views/home.jsp");
         mv.setView("home.jsp");
 
         return mv;
     }
-        @UrlMapping(url = "/test")
+
+    @UrlMapping(url = "/test")
     public ModelView afficherTest() {
         ModelView mv = new ModelView();
-    //    mv.setView("/WEB-INF/views/home.jsp");
+        //    mv.setView("/WEB-INF/views/home.jsp");
         mv.setView("views/test.jsp");
 
         return mv;
     }
 
+    @UrlMapping(url = "/employe")
+    public ModelView listEmployes() {
+        ModelView mv = new ModelView("views/employes.jsp");
+
+        mv.addObject("nom", "Rakoto");
+        mv.addObject("age", 30);
+        return mv;
+    }
 
     @UrlMapping(url = "/about")
     public String afficherAPropos() {
