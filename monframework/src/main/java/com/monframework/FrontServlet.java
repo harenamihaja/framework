@@ -70,13 +70,14 @@ public class FrontServlet extends HttpServlet {
         // Essayer de matcher les routes dynamiques
         for (Route route : routeMap.values()) {
             Matcher matcher = route.getPattern().matcher(path);
-
+            System.out.println("path " + path);
             if (matcher.matches()) {
                 // Extraire les valeurs des paramètres dans une Map (nommés, e.g., "id" -> "123")
                 Map<String, String> paramMap = new HashMap<>();
                 List<String> paramNames = route.getParamNames();
                 for (int i = 0; i < paramNames.size(); i++) {
                     paramMap.put(paramNames.get(i), matcher.group(i + 1));
+                    System.out.println("paramNom " + paramNames.get(i) + " matcher i+1 " + matcher.group(i + 1));
                 }
 
                 req.setAttribute("routeParams", paramMap);
@@ -135,10 +136,13 @@ public class FrontServlet extends HttpServlet {
                 Object[] args = new Object[parameters.length];
                 for (int i = 0; i < parameters.length; i++) {
                     PathVariable pv = parameters[i].getAnnotation(PathVariable.class);
+                    String name = "";
                     if (pv == null) {
-                        throw new ServletException("Paramètre non annoté avec @PathVariable");
+                         name = parameters[i].getName(); // "id", "name", etc.
+                    } else {
+                         name = pv.value();
                     }
-                    String name = pv.value();
+                    System.out.println("nom du param " + name);
                     if (name.isEmpty()) {
                         name = parameters[i].getName();  // Nécessite compilation avec -parameters
                     }
