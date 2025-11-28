@@ -22,10 +22,10 @@ echo === Compilation du framework ===
 cd /d "%root%\%framework%"
 
 if not exist out mkdir out
-"%JAVAC%" -cp "lib/*" -d out src\main\java\com\monframework\annotations\*.java
-"%JAVAC%" -cp "lib/*;out" -d out src\main\java\com\monframework\models\*.java
-"%JAVAC%" -cp "lib/*;out" -d out src\main\java\com\monframework\scanner\*.java
-"%JAVAC%" -cp "lib/*;out" -d out src\main\java\com\monframework\*.java
+"%JAVAC%"  -parameters  -cp "lib/*" -d out src\main\java\com\monframework\annotations\*.java
+"%JAVAC%"  -parameters  -cp "lib/*;out" -d out src\main\java\com\monframework\models\*.java
+"%JAVAC%"  -parameters  -cp "lib/*;out" -d out src\main\java\com\monframework\scanner\*.java
+"%JAVAC%"  -parameters -cp "lib/*;out" -d out src\main\java\com\monframework\*.java
 
 if %errorlevel% neq 0 (
     echo Erreur lors de la compilation du framework
@@ -57,8 +57,8 @@ mkdir build\WEB-INF\classes\controller
 copy "%root%\%framework%\framework.jar" "build\WEB-INF\lib\" >nul
 
 :: Compiler les classes de la webapp
-"%JAVAC%" -cp "lib/*;build\WEB-INF\lib\*" -d build\WEB-INF\classes\ src\main\java\controller\*.java
-"%JAVAC%" -cp "lib/*;build\WEB-INF\lib\*;build\WEB-INF\classes\*;build\WEB-INF\classes\controller\*" -d build\WEB-INF\classes src\main\java\*.java
+"%JAVAC%"  -parameters  -cp "lib/*;build\WEB-INF\lib\*" -d build\WEB-INF\classes\ src\main\java\controller\*.java
+"%JAVAC%"  -parameters  -cp "lib/*;build\WEB-INF\lib\*;build\WEB-INF\classes\*;build\WEB-INF\classes\controller\*" -d build\WEB-INF\classes src\main\java\*.java
 if %errorlevel% neq 0 (
     echo Erreur lors de la compilation de la webapp
     exit /b 1

@@ -31,9 +31,24 @@ public class MainController {
         return mv;
     }
 
+    // @UrlMapping(url = "/employe/{id}/detail/{name}")
+    // public ModelView detailEmploye(@PathVariable("id") String id, @PathVariable("name") String name) {
+    //     ModelView mv = new ModelView("/views/employe-detail.jsp");
+    //     System.out.println("ato oooooooooooooooooo");
+    //     System.out.println("id  " + id);
+    //     // mv.addObject("nom", "Rakoto");
+    //     // mv.addObject("age", 30);
+    //     mv.addObject("id", id);  // Envoie l'id via addObject pour la vue
+    //     mv.addObject("name", name);  // Envoie le name via addObject pour la vue
+
+    //     // Ajoutez de la logique ici si besoin, e.g., fetch data par id
+    //     return mv;
+    // }
+
+    
     @UrlMapping(url = "/employe/{id}/detail/{name}")
-    public String detailEmploye(@PathVariable("id") String id, @PathVariable("name") String name) {
-      //  ModelView mv = new ModelView("/views/employe-detail.jsp");
+    public ModelView detailEmploye(int  id, String name) {
+        ModelView mv = new ModelView("/views/employe-detail.jsp");
         System.out.println("ato oooooooooooooooooo");
         System.out.println("id  " + id);
         // mv.addObject("nom", "Rakoto");
@@ -58,6 +73,7 @@ public class MainController {
     //     // Ajoutez de la logique ici si besoin, e.g., fetch data par id
     //     return mv;
     // }
+
 
     @UrlMapping(url = "/employe")
     public ModelView listEmployes() {
