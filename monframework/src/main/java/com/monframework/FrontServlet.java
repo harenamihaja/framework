@@ -52,6 +52,16 @@ public class FrontServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        processRequest(req, resp);
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        processRequest(req, resp);
+    }
+
+// Méthode commune
+    private void processRequest(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         chercherRessource(req, resp);
     }
 
@@ -124,91 +134,101 @@ public class FrontServlet extends HttpServlet {
         try {
             Object controller = route.getController().getDeclaredConstructor().newInstance();
             Method method = route.getMethod();
+
+            // 1. Paramètres du formulaire (POST + query string GET)
+            Map<String, String[]> parameterMap = req.getParameterMap();
+
+            // 2. Paramètres d'URL dynamique : /dept/{id} → id=5
             @SuppressWarnings("unchecked")
-            Map<String, String> paramMap = (Map<String, String>) req.getAttribute("routeParams");
+            Map<String, String> routeParams = (Map<String, String>) req.getAttribute("routeParams");
+
+            // 3. Noms des placeholders dans l'ordre (ex: ["id", "name"])
+            List<String> urlParamNames = route.getParamNames();
 
             Object result;
+
             if (method.getParameterCount() == 0) {
                 result = method.invoke(controller);
             } else {
-                // Préparer les arguments pour l'injection des @PathVariable
                 Parameter[] parameters = method.getParameters();
                 Object[] args = new Object[parameters.length];
+
                 for (int i = 0; i < parameters.length; i++) {
-                    PathVariable pv = parameters[i].getAnnotation(PathVariable.class);
-                    String name = "";
-                    if (pv == null) {
-                         name = parameters[i].getName(); // "id", "name", etc.
-                    } else {
-                         name = pv.value();
+                    Parameter param = parameters[i];
+                    String paramName = param.getName(); // "nom", "id", "age", etc.
+                    Class<?> type = param.getType();
+
+                    String valueStr = null;
+
+                    // PRIORITÉ 1 : paramètres du formulaire (POST ou GET ?nom=...)
+                    if (parameterMap.containsKey(paramName)) {
+                        valueStr = parameterMap.get(paramName)[0];
+                        System.out.println("Paramètre formulaire : " + paramName + " = " + valueStr);
+                    } // PRIORITÉ 2 : paramètres d'URL dynamique {id}
+                    else if (routeParams != null) {
+                        String lookupName = paramName.startsWith("arg") ? urlParamNames.get(i) : paramName;
+                        valueStr = routeParams.get(lookupName);
+                        if (valueStr != null) {
+                            System.out.println("Paramètre URL : " + lookupName + " = " + valueStr);
+                        }
                     }
-                    System.out.println("nom du param " + name);
-                    if (name.isEmpty()) {
-                        name = parameters[i].getName();  // Nécessite compilation avec -parameters
+
+                    // Si toujours pas trouvé → erreur claire
+                    if (valueStr == null || valueStr.isEmpty()) {
+                        throw new ServletException("Paramètre requis manquant : '" + paramName + "' (ni dans le formulaire, ni dans l'URL)");
                     }
-                    String value = paramMap.get(name);
-                    if (value == null) {
-                        throw new ServletException("Valeur manquante pour @PathVariable '" + name + "'");
-                    }
-                    Class<?> type = parameters[i].getType();
-                    if (type == String.class) {
-                        args[i] = value;
-                    } else if (type == int.class || type == Integer.class) {
-                        args[i] = Integer.parseInt(value);
-                    } // Ajoutez d'autres types (e.g., long, double) si besoin
-                    else {
-                        throw new ServletException("Type non supporté pour @PathVariable: " + type.getName());
-                    }
+
+                    // Conversion automatique du type
+                    Object value = switch (type.getSimpleName()) {
+                        case "int", "Integer" ->
+                            Integer.parseInt(valueStr);
+                        case "long", "Long" ->
+                            Long.parseLong(valueStr);
+                        case "double", "Double" ->
+                            Double.parseDouble(valueStr);
+                        case "boolean", "Boolean" ->
+                            Boolean.parseBoolean(valueStr);
+                        default ->
+                            valueStr;
+                    };
+
+                    args[i] = value;
+
+                    // Ajout automatique dans la vue (optionnel mais très pratique)
+                    req.setAttribute(paramName, value);
                 }
+
                 result = method.invoke(controller, args);
             }
 
-            // === Cas 1 : La méthode retourne un ModelView ===
+            // === Gestion du retour (ModelView ou String) ===
             if (result instanceof ModelView mv) {
                 String view = mv.getView();
-
-                for (Map.Entry<String, Object> entry : mv.getMapData().entrySet()) {
-                    req.setAttribute(entry.getKey(), entry.getValue());
-                }
-
                 if (view == null || view.isEmpty()) {
-                    throw new ServletException("ModelView sans view définie.");
+                    throw new ServletException("ModelView sans vue définie");
                 }
 
-                RequestDispatcher dispatcher = req.getRequestDispatcher(view);
-                dispatcher.forward(req, resp);
-                return;
-            }
+                // Ajoute les données du controller
+                mv.getMapData().forEach((k, v) -> req.setAttribute(k, v));
 
-            // === Cas 2 : La méthode retourne un String ===
-            if (result instanceof String) {
+                req.getRequestDispatcher(view).forward(req, resp);
+            } else if (result instanceof String str) {
                 resp.setContentType("text/html; charset=UTF-8");
-                resp.getWriter().println((String) result);
-                return;
+                resp.getWriter().println(str);
+            } else if (result == null) {
+                throw new ServletException("Méthode retourne void. Attendu : ModelView ou String");
+            } else {
+                throw new ServletException("Type de retour non supporté : " + result.getClass());
             }
-
-            // === Cas 3 : Void ou type non supporté → erreur ===
-            if (result == null) {
-                throw new ServletException(
-                        "La méthode " + method.getName() + " retourne void. "
-                        + "Retour attendu : String ou ModelView."
-                );
-            }
-
-            // === Cas 4 : Type non autorisé ===
-            throw new ServletException(
-                    "Type de retour non supporté : " + result.getClass().getName()
-                    + ". Attendu : String ou ModelView."
-            );
 
         } catch (Exception e) {
             resp.setStatus(500);
             resp.setContentType("text/html; charset=UTF-8");
             PrintWriter out = resp.getWriter();
             out.println("<h1>Erreur Framework</h1>");
-            out.println("<p>" + e.getMessage() + "</p>");
-            e.printStackTrace();
+            out.println("<pre>");
+            e.printStackTrace(out);
+            out.println("</pre>");
         }
     }
-
 }

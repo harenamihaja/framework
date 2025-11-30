@@ -46,22 +46,8 @@ public class MainController {
     // }
 
     
-    @UrlMapping(url = "/employe/{id}/detail/{name}")
-    public ModelView detailEmploye(int  id, String name) {
-        ModelView mv = new ModelView("/views/employe-detail.jsp");
-        System.out.println("ato oooooooooooooooooo");
-        System.out.println("id  " + id);
-        // mv.addObject("nom", "Rakoto");
-        // mv.addObject("age", 30);
-        // mv.addObject("id", id);  // Envoie l'id via addObject pour la vue
-        // mv.addObject("name", name);  // Envoie le name via addObject pour la vue
-        return "url : /employe/"+id+"/detail/"+name ;
-        // Ajoutez de la logique ici si besoin, e.g., fetch data par id
-      //  return mv;
-    }
-    
     // @UrlMapping(url = "/employe/{id}/detail/{name}")
-    // public ModelView detailEmploye(@PathVariable("id") String id, @PathVariable("name") String name) {
+    // public ModelView detailEmploye(int  id, String name) {
     //     ModelView mv = new ModelView("/views/employe-detail.jsp");
     //     System.out.println("ato oooooooooooooooooo");
     //     System.out.println("id  " + id);
@@ -69,12 +55,41 @@ public class MainController {
     //     // mv.addObject("age", 30);
     //     mv.addObject("id", id);  // Envoie l'id via addObject pour la vue
     //     mv.addObject("name", name);  // Envoie le name via addObject pour la vue
-
+    //     return mv ;
     //     // Ajoutez de la logique ici si besoin, e.g., fetch data par id
-    //     return mv;
+    //   //  return mv;
     // }
+    
+    @UrlMapping(url = "/employe/{id}/detail/{name}")
+    public ModelView detailEmploye(@PathVariable("id") String id, @PathVariable("name") String name) {
+        ModelView mv = new ModelView("/views/employe-detail.jsp");
+        System.out.println("ato oooooooooooooooooo");
+        System.out.println("id  " + id);
+        // mv.addObject("nom", "Rakoto");
+        // mv.addObject("age", 30);
+        mv.addObject("id", id);  // Envoie l'id via addObject pour la vue
+        mv.addObject("name", name);  // Envoie le name via addObject pour la vue
+
+        // Ajoutez de la logique ici si besoin, e.g., fetch data par id
+        return mv;
+    }
 
 
+    @UrlMapping(url = "/save-dept")
+    public ModelView saveDept(String nom, int id) {
+        System.out.println("Nom reçu = " + nom);
+        System.out.println("ID reçu = " + id);
+
+        ModelView mv = new ModelView("views/success.jsp");
+        mv.addObject("message", "Département sauvegardé : " + nom + " (ID=" + id + ")");
+        return mv;
+    }
+    
+    @UrlMapping(url = "/formDept")
+    public ModelView formDept() {
+        ModelView mv = new ModelView("views/form_dept.jsp");
+        return mv;
+    }
     @UrlMapping(url = "/employe")
     public ModelView listEmployes() {
         ModelView mv = new ModelView("views/employes.jsp");
