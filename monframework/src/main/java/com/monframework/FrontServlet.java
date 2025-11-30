@@ -13,6 +13,7 @@ import com.monframework.scanner.Route;
 import com.monframework.models.ModelView;
 import com.monframework.scanner.ControllerScanner;
 import com.monframework.annotations.PathVariable;  // Import the new annotation
+import com.monframework.annotations.RequestParam;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -155,30 +156,49 @@ public class FrontServlet extends HttpServlet {
 
                 for (int i = 0; i < parameters.length; i++) {
                     Parameter param = parameters[i];
-                    String paramName = param.getName(); // "nom", "id", "age", etc.
                     Class<?> type = param.getType();
+                    String paramName = param.getName(); // nom du paramètre Java (ex: "nom")
+
+                    String fieldName;        //  le nom qu’on va chercher dans le formulaire ou l’URL
+                    boolean required = true;
+
+                    RequestParam rp = param.getAnnotation(RequestParam.class);
+                    if (rp != null) {
+                        // Cas 1 : @RequestParam présent
+                        fieldName = rp.value().isEmpty() ? paramName : rp.value();
+                        required = rp.required();
+                    } else {
+                        // Cas 2 : pas d’annotation → comportement actuel (magique)
+                        fieldName = paramName;
+                    }
 
                     String valueStr = null;
 
-                    // PRIORITÉ 1 : paramètres du formulaire (POST ou GET ?nom=...)
-                    if (parameterMap.containsKey(paramName)) {
-                        valueStr = parameterMap.get(paramName)[0];
-                        System.out.println("Paramètre formulaire : " + paramName + " = " + valueStr);
-                    } // PRIORITÉ 2 : paramètres d'URL dynamique {id}
+                    // 1. Chercher dans le formulaire (POST ou GET query)
+                    if (parameterMap.containsKey(fieldName)) {
+                        valueStr = parameterMap.get(fieldName)[0];
+                    } // 2. Sinon chercher dans les variables d’URL {id}
                     else if (routeParams != null) {
-                        String lookupName = paramName.startsWith("arg") ? urlParamNames.get(i) : paramName;
-                        valueStr = routeParams.get(lookupName);
-                        if (valueStr != null) {
-                            System.out.println("Paramètre URL : " + lookupName + " = " + valueStr);
+                        String lookup = paramName.startsWith("arg") ? urlParamNames.get(i) : fieldName;
+                        valueStr = routeParams.get(lookup);
+                    }
+
+                    // Si obligatoire et pas trouvé → erreur claire
+                    if (required && (valueStr == null || valueStr.isEmpty())) {
+                        throw new ServletException("Paramètre requis manquant : " + fieldName);
+                    }
+
+                    // Si non obligatoire et pas trouvé → on met null / valeur par défaut
+                    if (valueStr == null) {
+                        if (type.isPrimitive()) {
+                            throw new ServletException("Paramètre primitif non initialisé : " + fieldName);
                         }
+                        args[i] = null;
+                        req.setAttribute(fieldName, null);
+                        continue;
                     }
 
-                    // Si toujours pas trouvé → erreur claire
-                    if (valueStr == null || valueStr.isEmpty()) {
-                        throw new ServletException("Paramètre requis manquant : '" + paramName + "' (ni dans le formulaire, ni dans l'URL)");
-                    }
-
-                    // Conversion automatique du type
+                    // Conversion du type
                     Object value = switch (type.getSimpleName()) {
                         case "int", "Integer" ->
                             Integer.parseInt(valueStr);
@@ -193,11 +213,8 @@ public class FrontServlet extends HttpServlet {
                     };
 
                     args[i] = value;
-
-                    // Ajout automatique dans la vue (optionnel mais très pratique)
-                    req.setAttribute(paramName, value);
+                    req.setAttribute(fieldName, value); // toujours dispo dans la JSP
                 }
-
                 result = method.invoke(controller, args);
             }
 

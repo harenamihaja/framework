@@ -1,5 +1,5 @@
-<form action="save-dept" method="post">
+<form action="save" method="post">
     Nom : <input type="text" name="nom">
-    ID  : <input type="number" name="id">
+    ID  : <input type="number" name="age">
     <button type="submit">Envoyer</button>
 </form>

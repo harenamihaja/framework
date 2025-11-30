@@ -2,6 +2,7 @@ package controller;
 
 import com.monframework.annotations.Controller;
 import com.monframework.annotations.PathVariable;
+import com.monframework.annotations.RequestParam;
 import com.monframework.annotations.UrlMapping;
 import com.monframework.models.ModelView;
 
@@ -40,12 +41,9 @@ public class MainController {
     //     // mv.addObject("age", 30);
     //     mv.addObject("id", id);  // Envoie l'id via addObject pour la vue
     //     mv.addObject("name", name);  // Envoie le name via addObject pour la vue
-
     //     // Ajoutez de la logique ici si besoin, e.g., fetch data par id
     //     return mv;
     // }
-
-    
     // @UrlMapping(url = "/employe/{id}/detail/{name}")
     // public ModelView detailEmploye(int  id, String name) {
     //     ModelView mv = new ModelView("/views/employe-detail.jsp");
@@ -59,7 +57,22 @@ public class MainController {
     //     // Ajoutez de la logique ici si besoin, e.g., fetch data par id
     //   //  return mv;
     // }
-    
+    @UrlMapping(url = "/save")
+    public ModelView save1(@RequestParam("nom") String name,
+            @RequestParam("age") int age) {
+        // OK même si les noms Java sont différents
+              ModelView mv = new ModelView("/views/employe-detail.jsp");
+        System.out.println("ato oooooooooooooooooo");
+        System.out.println("id  " + age);
+        // mv.addObject("nom", "Rakoto");
+        // mv.addObject("age", 30);
+        mv.addObject("id", age);  // Envoie l'id via addObject pour la vue
+        mv.addObject("name", name);  // Envoie le name via addObject pour la vue
+
+        // Ajoutez de la logique ici si besoin, e.g., fetch data par id
+        return mv;
+    }
+
     @UrlMapping(url = "/employe/{id}/detail/{name}")
     public ModelView detailEmploye(@PathVariable("id") String id, @PathVariable("name") String name) {
         ModelView mv = new ModelView("/views/employe-detail.jsp");
@@ -74,7 +87,6 @@ public class MainController {
         return mv;
     }
 
-
     @UrlMapping(url = "/save-dept")
     public ModelView saveDept(String nom, int id) {
         System.out.println("Nom reçu = " + nom);
@@ -84,12 +96,13 @@ public class MainController {
         mv.addObject("message", "Département sauvegardé : " + nom + " (ID=" + id + ")");
         return mv;
     }
-    
+
     @UrlMapping(url = "/formDept")
     public ModelView formDept() {
         ModelView mv = new ModelView("views/form_dept.jsp");
         return mv;
     }
+
     @UrlMapping(url = "/employe")
     public ModelView listEmployes() {
         ModelView mv = new ModelView("views/employes.jsp");
