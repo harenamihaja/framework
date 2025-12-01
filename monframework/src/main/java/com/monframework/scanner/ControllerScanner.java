@@ -1,6 +1,8 @@
 package com.monframework.scanner;
 
 import com.monframework.annotations.Controller;
+import com.monframework.annotations.GetMapping;
+import com.monframework.annotations.PostMapping;
 import com.monframework.annotations.UrlMapping;
 import java.io.File;
 import java.lang.reflect.Method;
@@ -49,8 +51,19 @@ public class ControllerScanner {
             for (Method method : controller.getDeclaredMethods()) {
                 if (method.isAnnotationPresent(UrlMapping.class)) {
                     UrlMapping mapping = method.getAnnotation(UrlMapping.class);
-                    routes.add(new Route(mapping.url(), method, controller));
+                    routes.add(new Route(mapping.url(), method, controller,"ANY"));
                 }
+                // @GetMapping → uniquement GET
+            if (method.isAnnotationPresent(GetMapping.class)) {
+                GetMapping ann = method.getAnnotation(GetMapping.class);
+                routes.add(new Route(ann.value(), method, controller, "GET"));
+            }
+
+            // @PostMapping → uniquement POST
+            else if (method.isAnnotationPresent(PostMapping.class)) {
+                PostMapping ann = method.getAnnotation(PostMapping.class);
+                routes.add(new Route(ann.value(), method, controller, "POST"));
+            }
             }
         }
 

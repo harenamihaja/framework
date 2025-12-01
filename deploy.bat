@@ -25,6 +25,7 @@ if not exist out mkdir out
 "%JAVAC%"  -parameters  -cp "lib/*" -d out src\main\java\com\monframework\annotations\*.java
 "%JAVAC%"  -parameters  -cp "lib/*;out" -d out src\main\java\com\monframework\models\*.java
 "%JAVAC%"  -parameters  -cp "lib/*;out" -d out src\main\java\com\monframework\scanner\*.java
+"%JAVAC%"  -parameters  -cp "lib/*;out" -d out src\main\java\com\monframework\exceptions\*.java
 "%JAVAC%"  -parameters -cp "lib/*;out" -d out src\main\java\com\monframework\*.java
 
 if %errorlevel% neq 0 (

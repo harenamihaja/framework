@@ -2,9 +2,11 @@ package controller;
 
 import com.monframework.annotations.Controller;
 import com.monframework.annotations.PathVariable;
+import com.monframework.annotations.PostMapping;
 import com.monframework.annotations.RequestParam;
 import com.monframework.annotations.UrlMapping;
 import com.monframework.models.ModelView;
+import com.monframework.annotations.GetMapping;
 
 @Controller
 public class MainController {
@@ -57,12 +59,13 @@ public class MainController {
     //     // Ajoutez de la logique ici si besoin, e.g., fetch data par id
     //   //  return mv;
     // }
-    @UrlMapping(url = "/save")
+   // @UrlMapping(url = "/save")
+    @PostMapping(value = "/save")
     public ModelView save1(@RequestParam("nom") String name,
             @RequestParam("age") int age) {
         // OK même si les noms Java sont différents
               ModelView mv = new ModelView("/views/employe-detail.jsp");
-        System.out.println("ato oooooooooooooooooo");
+        System.out.println("Post oooooooooooooooooo");
         System.out.println("id  " + age);
         // mv.addObject("nom", "Rakoto");
         // mv.addObject("age", 30);
