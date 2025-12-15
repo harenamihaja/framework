@@ -88,7 +88,7 @@ public class FrontServlet extends HttpServlet {
 
         String path = req.getRequestURI().substring(req.getContextPath().length());
         String httpMethod = req.getMethod();
-
+        System.out.println("Recherche de la ressource pour l'URL : " + path + " [" + httpMethod + "]");
         Route matchedRoute = null;
         Map<String, String> routeParams = null;
 
@@ -186,74 +186,125 @@ public class FrontServlet extends HttpServlet {
 
             if (method.getParameterCount() == 0) {
                 result = method.invoke(controller);
-            } else { // count du nombre de parametre mihoatra ny 0 , arguments
-                //atao anaty tableaux ilay parametre rehetra
+            } else {
                 Parameter[] parameters = method.getParameters();
+
+                // === NOUVELLE FONCTIONNALITÉ : Détecter si on a un paramètre Map<String, Object> ===
+                boolean hasMapParameter = false;
+                int mapParamIndex = -1;
+                for (int i = 0; i < parameters.length; i++) {
+                    if (parameters[i].getType().equals(Map.class)
+                            && parameters[i].getParameterizedType().getTypeName().equals("java.util.Map<java.lang.String, java.lang.Object>")) {
+                        if (hasMapParameter) {
+                            throw new ServletException("Plusieurs paramètres de type Map<String, Object> détectés. Un seul est autorisé.");
+                        }
+                        hasMapParameter = true;
+                        mapParamIndex = i;
+                    }
+                }
+
                 Object[] args = new Object[parameters.length];
 
-                for (int i = 0; i < parameters.length; i++) {
-                    Parameter param = parameters[i];
-                    Class<?> type = param.getType(); //type du paramètre (ex: String, int, etc.)
-                    String paramName = param.getName(); // nom du paramètre Java (ex: "nom")
-
-                    String fieldName;        //  le nom qu’on va chercher dans le formulaire ou l’URL
-                    boolean required = true;
-
-                    RequestParam rp = param.getAnnotation(RequestParam.class);
-                    if (rp != null) {
-                        // Cas 1 : @RequestParam présent
-                        //alaina le valeur ao ex: RequestParam("nom") -> nom
-                        fieldName = rp.value().isEmpty() ? paramName : rp.value();
-                        required = rp.required();
-                    } else {
-                        // Cas 2 : pas d’annotation → comportement actuel (magique)
-                        fieldName = paramName;
+                if (hasMapParameter) {
+                    // === Cas 1 : Il y a un paramètre Map<String, Object> ===
+                    // On permet qu'il y ait d'autres paramètres, mais on les ignore (ou on peut lever une exception si tu veux être strict)
+                    // Ici on autorise uniquement la Map seule pour simplifier, mais tu peux ajuster
+                    if (parameters.length > 1) {
+                        // Option douce : on accepte mais on ignore les autres
+                        // Option stricte : throw new ServletException("Lorsque Map<String,Object> est utilisé, il doit être le seul paramètre.");
                     }
 
-                    String valueStr = null;
+                    // Construction de la Map avec tous les paramètres de la requête
+                    Map<String, Object> requestData = new HashMap<>();
+                    //  Map<String, String[]> parameterMap = req.getParameterMap();
 
-                    // 1. Chercher dans le formulaire (POST ou GET query)
-                    if (parameterMap.containsKey(fieldName)) {
-                        valueStr = parameterMap.get(fieldName)[0];
-                    } // 2. Sinon chercher dans les variables d’URL {id}
-                    else if (routeParams != null) {
-                        String lookup = paramName.startsWith("arg") ? urlParamNames.get(i) : fieldName;
-                        valueStr = routeParams.get(lookup);
-                    }
-
-                    // Si obligatoire et pas trouvé → erreur claire
-                    if (required && (valueStr == null || valueStr.isEmpty())) {
-                        throw new ServletException("Paramètre requis manquant : " + fieldName);
-                    }
-
-                    // Si non obligatoire et pas trouvé → on met null / valeur par défaut
-                    if (valueStr == null) {
-                        if (type.isPrimitive()) {
-                            throw new ServletException("Paramètre primitif non initialisé : " + fieldName);
+                    for (Map.Entry<String, String[]> entry : parameterMap.entrySet()) {
+                        String key = entry.getKey();
+                        String[] values = entry.getValue();
+                        if (values.length == 1) {
+                            requestData.put(key, values[0]);
+                        } else {
+                            requestData.put(key, values); // tableau si plusieurs valeurs
                         }
-                        args[i] = null;
-                        req.setAttribute(fieldName, null);
-                        continue;
                     }
 
-                    // Conversion du type
-                    Object value = switch (type.getSimpleName()) {
-                        case "int", "Integer" ->
-                            Integer.parseInt(valueStr);
-                        case "long", "Long" ->
-                            Long.parseLong(valueStr);
-                        case "double", "Double" ->
-                            Double.parseDouble(valueStr);
-                        case "boolean", "Boolean" ->
-                            Boolean.parseBoolean(valueStr);
-                        default ->
-                            valueStr;
-                    };
+                    // Ajouter aussi les paramètres de route (PathVariable) si présents
+                    if (routeParams != null) {
+                        requestData.putAll(routeParams);
+                    }
 
-                    args[i] = value;
-                    req.setAttribute(fieldName, value); // toujours dispo dans la JSP
+                    args[mapParamIndex] = requestData;
+
+                    // Remplir les autres args avec null si besoin (cas rare)
+                    for (int i = 0; i < args.length; i++) {
+                        if (i != mapParamIndex) {
+                            args[i] = null;
+                        }
+                    }
+
+                    result = method.invoke(controller, args);
+
+                } else {
+                    // === Cas 2 : Comportement EXISTANT (inchangé) ===
+                    // Ton code actuel pour gérer @RequestParam, PathVariable, etc.
+                    Object[] argsClassic = new Object[parameters.length];
+
+                    for (int i = 0; i < parameters.length; i++) {
+                        Parameter param = parameters[i];
+                        Class<?> type = param.getType();
+                        String paramName = param.getName();
+
+                        String fieldName;
+                        boolean required = true;
+
+                        RequestParam rp = param.getAnnotation(RequestParam.class);
+                        if (rp != null) {
+                            fieldName = rp.value().isEmpty() ? paramName : rp.value();
+                            required = rp.required();
+                        } else {
+                            fieldName = paramName;
+                        }
+
+                        String valueStr = null;
+
+                        if (parameterMap.containsKey(fieldName)) {
+                            valueStr = parameterMap.get(fieldName)[0];
+                        } else if (routeParams != null) {
+                            String lookup = paramName.startsWith("arg") ? urlParamNames.get(i) : fieldName;
+                            valueStr = routeParams.get(lookup);
+                        }
+
+                        if (required && (valueStr == null || valueStr.isEmpty())) {
+                            throw new ServletException("Paramètre requis manquant : " + fieldName);
+                        }
+
+                        if (valueStr == null) {
+                            if (type.isPrimitive()) {
+                                throw new ServletException("Paramètre primitif non initialisé : " + fieldName);
+                            }
+                            argsClassic[i] = null;
+                            req.setAttribute(fieldName, null);
+                            continue;
+                        }
+
+                        Object value = switch (type.getSimpleName()) {
+                            case "int", "Integer" ->
+                                Integer.parseInt(valueStr);
+                            case "long", "Long" ->
+                                Long.parseLong(valueStr);
+                            case "double", "Double" ->
+                                Double.parseDouble(valueStr);
+                            case "boolean", "Boolean" ->
+                                Boolean.parseBoolean(valueStr);
+                            default ->
+                                valueStr;
+                        };
+
+                        argsClassic[i] = value;
+                        req.setAttribute(fieldName, value);
+                    }
+                    result = method.invoke(controller, argsClassic);
                 }
-                result = method.invoke(controller, args);
             }
 
             // === Gestion du retour (ModelView ou String) ===
@@ -286,6 +337,7 @@ public class FrontServlet extends HttpServlet {
             out.println("</pre>");
         }
     }
+
     private void showRouteList(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         resp.setContentType("text/html; charset=UTF-8");
         PrintWriter out = resp.getWriter();
@@ -303,22 +355,26 @@ public class FrontServlet extends HttpServlet {
 
                     routes.forEach(r -> {
                         String methodColor = switch (r.getHttpMethod()) {
-                            case "GET"  -> "#28a745";
-                            case "POST" -> "#dc3545";
-                            case "ANY"  -> "#6f42c1";
-                            default     -> "#000000";
+                            case "GET" ->
+                                "#28a745";
+                            case "POST" ->
+                                "#dc3545";
+                            case "ANY" ->
+                                "#6f42c1";
+                            default ->
+                                "#000000";
                         };
 
                         out.printf(
-                            "<li>" +
-                            "  <a href='%s%s' style='text-decoration:none; font-weight:bold;'>%s</a> " +
-                            "  <span style='color:%s; font-weight:bold; padding:2px 6px; border-radius:4px;'>%s</span> → " +
-                            "  <code>%s.%s()</code>" +
-                            "</li>%n",
-                            req.getContextPath(), url, url,
-                            methodColor, r.getHttpMethod(),
-                            r.getController().getSimpleName(),
-                            r.getMethod().getName()
+                                "<li>"
+                                + "  <a href='%s%s' style='text-decoration:none; font-weight:bold;'>%s</a> "
+                                + "  <span style='color:%s; font-weight:bold; padding:2px 6px; border-radius:4px;'>%s</span> → "
+                                + "  <code>%s.%s()</code>"
+                                + "</li>%n",
+                                req.getContextPath(), url, url,
+                                methodColor, r.getHttpMethod(),
+                                r.getController().getSimpleName(),
+                                r.getMethod().getName()
                         );
                     });
                 });
@@ -326,6 +382,7 @@ public class FrontServlet extends HttpServlet {
         out.println("</ul>");
         out.println("<p><small>Framework développé avec amour à Madagascar</small></p>");
     }
+
     private Route findByHttpMethod(List<Route> routes, String httpMethod) {
         for (Route route : routes) {
             if (route.matchesHttpMethod(httpMethod)) {

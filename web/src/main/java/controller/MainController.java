@@ -1,5 +1,7 @@
 package controller;
 
+import java.util.Map;
+
 import com.monframework.annotations.Controller;
 import com.monframework.annotations.PathVariable;
 import com.monframework.annotations.PostMapping;
@@ -34,6 +36,25 @@ public class MainController {
         return mv;
     }
 
+    @PostMapping(value = "/save")
+    public ModelView saveWithMap(Map<String, Object> data) {
+        ModelView mv = new ModelView("/views/employe-detail.jsp");
+
+        System.out.println("Données reçues : " + data);
+        // data contient : {nom=John, age=25} par exemple
+
+        String name = (String) data.get("nom");
+        Integer age = null;
+        if (data.get("age") instanceof String) {
+            age = Integer.valueOf((String) data.get("age"));
+        } else if (data.get("age") instanceof Integer) {
+            age = (Integer) data.get("age");
+        }
+
+        mv.addObject("id", age);
+        mv.addObject("name", name);
+        return mv;
+    }
     // @UrlMapping(url = "/employe/{id}/detail/{name}")
     // public ModelView detailEmploye(@PathVariable("id") String id, @PathVariable("name") String name) {
     //     ModelView mv = new ModelView("/views/employe-detail.jsp");
@@ -59,22 +80,18 @@ public class MainController {
     //     // Ajoutez de la logique ici si besoin, e.g., fetch data par id
     //   //  return mv;
     // }
-   // @UrlMapping(url = "/save")
-    @PostMapping(value = "/save")
-    public ModelView save1(@RequestParam("nom") String name,
-            @RequestParam("age") int age) {
-        // OK même si les noms Java sont différents
-              ModelView mv = new ModelView("/views/employe-detail.jsp");
-        System.out.println("Post oooooooooooooooooo");
-        System.out.println("id  " + age);
-        // mv.addObject("nom", "Rakoto");
-        // mv.addObject("age", 30);
-        mv.addObject("id", age);  // Envoie l'id via addObject pour la vue
-        mv.addObject("name", name);  // Envoie le name via addObject pour la vue
-
-        // Ajoutez de la logique ici si besoin, e.g., fetch data par id
-        return mv;
-    }
+    // @UrlMapping(url = "/save")
+    // @PostMapping(value = "/save")
+    // public ModelView save1(@RequestParam("nom") String name,
+    //         @RequestParam("age") int age) {
+    //     // OK même si les noms Java sont différents
+    //     ModelView mv = new ModelView("/views/employe-detail.jsp");
+    //     System.out.println("Post oooooooooooooooooo");
+    //     System.out.println("id  " + age);
+    //     mv.addObject("id", age);
+    //     mv.addObject("name", name);
+    //     return mv;
+    // }
 
     @UrlMapping(url = "/employe/{id}/detail/{name}")
     public ModelView detailEmploye(@PathVariable("id") String id, @PathVariable("name") String name) {
