@@ -4,6 +4,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.annotation.MultipartConfig;
+import jakarta.servlet.http.Part;
 import java.io.IOException;
 import jakarta.servlet.RequestDispatcher;
 import java.io.PrintWriter;
@@ -13,6 +15,8 @@ import com.monframework.scanner.Route;
 import com.monframework.models.ModelView;
 import com.monframework.scanner.ControllerScanner;
 import com.monframework.annotations.JsonResponse;
+import com.monframework.annotations.FileUpload;
+import com.monframework.models.UploadedFile;
 import com.monframework.exceptions.MethodNotAllowedException;
 
 import java.util.ArrayList;
@@ -20,12 +24,20 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Collection;
 import java.util.regex.Matcher;
 
+@MultipartConfig(
+    fileSizeThreshold = 1024 * 1024 * 2,  // 2MB
+    maxFileSize = 1024 * 1024 * 10,       // 10MB
+    maxRequestSize = 1024 * 1024 * 50     // 50MB
+)
 public class FrontServlet extends HttpServlet {
 
     private Map<String, List<Route>> routeMap = new HashMap<>();
+    private static final String UPLOAD_DIR = "uploads";
 
+    
     @Override
     public void init() throws ServletException {
         super.init();
@@ -152,7 +164,7 @@ public class FrontServlet extends HttpServlet {
             throws ServletException, IOException {
         try {
             Object controller = route.getController().getDeclaredConstructor().newInstance();
-            Method method = route.getMethod(); // Déclaré une seule fois
+            Method method = route.getMethod();
 
             Map<String, String[]> parameterMap = req.getParameterMap();
             @SuppressWarnings("unchecked")
@@ -214,58 +226,8 @@ public class FrontServlet extends HttpServlet {
                     result = method.invoke(controller, args);
 
                 } else {
-                    // === CAS 3 : Paramètres classiques (@RequestParam / @PathVariable) ===
-                    Object[] argsClassic = new Object[parameters.length];
-                    for (int i = 0; i < parameters.length; i++) {
-                        Parameter param = parameters[i];
-                        Class<?> type = param.getType();
-                        String paramName = param.getName();
-
-                        String fieldName = paramName;
-                        boolean required = true;
-
-                        com.monframework.annotations.RequestParam rp = param.getAnnotation(com.monframework.annotations.RequestParam.class);
-                        if (rp != null) {
-                            fieldName = rp.value().isEmpty() ? paramName : rp.value();
-                            required = rp.required();
-                        }
-
-                        String valueStr = null;
-                        if (parameterMap.containsKey(fieldName)) {
-                            valueStr = parameterMap.get(fieldName)[0];
-                        } else if (routeParams != null) {
-                            String lookup = urlParamNames.size() > i ? urlParamNames.get(i) : fieldName;
-                            valueStr = routeParams.get(lookup);
-                        }
-
-                        if (required && (valueStr == null || valueStr.isEmpty())) {
-                            throw new ServletException("Paramètre requis manquant : " + fieldName);
-                        }
-
-                        if (valueStr == null) {
-                            if (type.isPrimitive()) {
-                                throw new ServletException("Paramètre primitif non initialisé : " + fieldName);
-                            }
-                            argsClassic[i] = null;
-                            continue;
-                        }
-
-                        Object value = switch (type.getSimpleName()) {
-                            case "int", "Integer" ->
-                                Integer.parseInt(valueStr);
-                            case "long", "Long" ->
-                                Long.parseLong(valueStr);
-                            case "double", "Double" ->
-                                Double.parseDouble(valueStr);
-                            case "boolean", "Boolean" ->
-                                Boolean.parseBoolean(valueStr);
-                            default ->
-                                valueStr;
-                        };
-
-                        argsClassic[i] = value;
-                        req.setAttribute(fieldName, value);
-                    }
+                    // === CAS 3 : Paramètres classiques (@RequestParam / @PathVariable / @FileUpload) ===
+                    Object[] argsClassic = buildMethodArguments(method, req, parameterMap, routeParams, urlParamNames);
                     result = method.invoke(controller, argsClassic);
                 }
             }
@@ -317,6 +279,126 @@ public class FrontServlet extends HttpServlet {
             e.printStackTrace(out);
             out.println("</pre>");
         }
+    }
+
+    // ==================== NOUVELLE MÉTHODE POUR GÉRER LES PARAMÈTRES AVEC UPLOAD ====================
+    private Object[] buildMethodArguments(Method method, HttpServletRequest req, 
+                                         Map<String, String[]> parameterMap, 
+                                         Map<String, String> routeParams, 
+                                         List<String> urlParamNames) 
+            throws Exception {
+        
+        Parameter[] parameters = method.getParameters();
+        Object[] args = new Object[parameters.length];
+
+        for (int i = 0; i < parameters.length; i++) {
+            Parameter param = parameters[i];
+            Class<?> type = param.getType();
+            String paramName = param.getName();
+
+            // === GESTION DE HttpServletRequest ===
+            if (type == HttpServletRequest.class) {
+                args[i] = req;
+                continue;
+            }
+
+            // === GESTION DE HttpServletResponse ===
+            if (type == HttpServletResponse.class) {
+                // Note: vous devrez passer resp en paramètre à buildMethodArguments
+                // Pour l'instant on le laisse null, à implémenter si besoin
+                args[i] = null;
+                continue;
+            }
+
+            // === GESTION DES FICHIERS UPLOADÉS (UN SEUL) ===
+            if (type == UploadedFile.class) {
+                FileUpload fileAnnotation = param.getAnnotation(FileUpload.class);
+                String fieldName = (fileAnnotation != null && !fileAnnotation.value().isEmpty()) 
+                                   ? fileAnnotation.value() 
+                                   : paramName;
+                
+                Part part = req.getPart(fieldName);
+                
+                if (part == null || part.getSize() == 0) {
+                    if (fileAnnotation != null && fileAnnotation.required()) {
+                        throw new ServletException("Fichier requis manquant : " + fieldName);
+                    }
+                    args[i] = null;
+                } else {
+                    args[i] = new UploadedFile(part);
+                }
+                continue;
+            }
+
+            // === GESTION DES LISTES DE FICHIERS (UPLOAD MULTIPLE) ===
+            if (type == List.class && param.getParameterizedType().getTypeName()
+                    .contains("UploadedFile")) {
+                FileUpload fileAnnotation = param.getAnnotation(FileUpload.class);
+                String fieldName = (fileAnnotation != null && !fileAnnotation.value().isEmpty()) 
+                                   ? fileAnnotation.value() 
+                                   : paramName;
+                
+                Collection<Part> parts = req.getParts();
+                List<UploadedFile> files = new ArrayList<>();
+                
+                for (Part part : parts) {
+                    if (part.getName().equals(fieldName) && part.getSize() > 0) {
+                        files.add(new UploadedFile(part));
+                    }
+                }
+                
+                if (files.isEmpty() && fileAnnotation != null && fileAnnotation.required()) {
+                    throw new ServletException("Fichiers requis manquants : " + fieldName);
+                }
+                
+                args[i] = files;
+                continue;
+            }
+
+            // === LOGIQUE EXISTANTE POUR LES AUTRES PARAMÈTRES ===
+            String fieldName = paramName;
+            boolean required = true;
+
+            com.monframework.annotations.RequestParam rp = 
+                param.getAnnotation(com.monframework.annotations.RequestParam.class);
+            if (rp != null) {
+                fieldName = rp.value().isEmpty() ? paramName : rp.value();
+                required = rp.required();
+            }
+
+            String valueStr = null;
+            if (parameterMap.containsKey(fieldName)) {
+                valueStr = parameterMap.get(fieldName)[0];
+            } else if (routeParams != null) {
+                String lookup = urlParamNames.size() > i ? urlParamNames.get(i) : fieldName;
+                valueStr = routeParams.get(lookup);
+            }
+
+            if (required && (valueStr == null || valueStr.isEmpty())) {
+                throw new ServletException("Paramètre requis manquant : " + fieldName);
+            }
+
+            if (valueStr == null) {
+                if (type.isPrimitive()) {
+                    throw new ServletException("Paramètre primitif non initialisé : " + fieldName);
+                }
+                args[i] = null;
+                continue;
+            }
+
+            Object value = switch (type.getSimpleName()) {
+                case "int", "Integer" -> Integer.parseInt(valueStr);
+                case "long", "Long" -> Long.parseLong(valueStr);
+                case "double", "Double" -> Double.parseDouble(valueStr);
+                case "boolean", "Boolean" -> Boolean.parseBoolean(valueStr);
+                default -> valueStr;
+            };
+
+            args[i] = value;
+            req.setAttribute(fieldName, value);
+        }
+
+        return args;
     }
 
     // ==================== MÉTHODES UTILITAIRES POUR LE BINDING D'OBJETS MODÈLE ====================
@@ -390,7 +472,6 @@ public class FrontServlet extends HttpServlet {
 
             if (subPath != null) {
                 // === CAS IMBRIQUÉ ===
-                // Trouver le GETTER pour récupérer l'objet existant
                 String getterName = "get" + property.substring(0, 1).toUpperCase() + property.substring(1);
                 Method getter = findGetter(clazz, getterName);
 
@@ -399,13 +480,11 @@ public class FrontServlet extends HttpServlet {
                     nestedObj = getter.invoke(obj);
                 }
 
-                // Si l'objet n'existe pas encore, le créer
                 if (nestedObj == null) {
                     nestedObj = paramType.getDeclaredConstructor().newInstance();
                     setter.invoke(obj, new Object[]{nestedObj});
                 }
 
-                // Appliquer récursivement les valeurs sur l'objet imbriqué
                 Map<String, String> subMap = new HashMap<>();
                 subMap.put(subPath, valueStr);
                 applyValuesToObject(nestedObj, subMap);
@@ -446,7 +525,6 @@ public class FrontServlet extends HttpServlet {
         }
     }
 
-// Ajouter cette méthode pour trouver le getter
     private Method findGetter(Class<?> clazz, String getterName) {
         for (Method m : clazz.getMethods()) {
             if (m.getName().equals(getterName) && m.getParameterCount() == 0) {
@@ -497,7 +575,7 @@ public class FrontServlet extends HttpServlet {
             return Byte.valueOf(trimmed);
         }
 
-        return trimmed; // fallback
+        return trimmed;
     }
     // ==================== FIN DES MÉTHODES UTILITAIRES ====================
 
@@ -517,14 +595,10 @@ public class FrontServlet extends HttpServlet {
 
                     routes.forEach(r -> {
                         String methodColor = switch (r.getHttpMethod()) {
-                            case "GET" ->
-                                "#28a745";
-                            case "POST" ->
-                                "#dc3545";
-                            case "ANY" ->
-                                "#6f42c1";
-                            default ->
-                                "#000000";
+                            case "GET" -> "#28a745";
+                            case "POST" -> "#dc3545";
+                            case "ANY" -> "#6f42c1";
+                            default -> "#000000";
                         };
 
                         out.printf(
@@ -600,7 +674,6 @@ public class FrontServlet extends HttpServlet {
         boolean first = true;
 
         for (java.lang.reflect.Field field : fields) {
-            // Ignorer les champs statiques, transitoires ou synthétiques
             int modifiers = field.getModifiers();
             if (java.lang.reflect.Modifier.isStatic(modifiers)
                     || java.lang.reflect.Modifier.isTransient(modifiers)
@@ -612,7 +685,7 @@ public class FrontServlet extends HttpServlet {
             try {
                 Object value = field.get(obj);
                 if (value == null) {
-                    continue; // on n'inclut pas les champs null (tu peux changer si tu veux "null")
+                    continue;
                 }
 
                 if (!first) {
@@ -621,10 +694,9 @@ public class FrontServlet extends HttpServlet {
                 first = false;
 
                 sb.append("\"").append(field.getName()).append("\":");
-                sb.append(toJson(value)); // récursion pour gérer objets imbriqués, listes, etc.
+                sb.append(toJson(value));
 
             } catch (IllegalAccessException e) {
-                // En cas d'erreur d'accès, on ignore ou on logue
                 if (!first) {
                     sb.append(",");
                 }
@@ -637,7 +709,6 @@ public class FrontServlet extends HttpServlet {
         return sb.toString();
     }
 
-// Méthode utilitaire pour échapper les caractères spéciaux dans les strings JSON
     private String escapeJsonString(String str) {
         if (str == null) {
             return "";
@@ -649,7 +720,6 @@ public class FrontServlet extends HttpServlet {
                 .replace("\n", "\\n")
                 .replace("\r", "\\r")
                 .replace("\t", "\\t");
-        // Pour plus de sécurité, tu peux ajouter d'autres échappements si besoin
     }
 
     private String listToJson(List<?> list) {
@@ -670,7 +740,6 @@ public class FrontServlet extends HttpServlet {
     }
 
     private String arrayToJson(Object array) {
-        // Similaire à listToJson, mais avec reflection
         int length = java.lang.reflect.Array.getLength(array);
         StringBuilder sb = new StringBuilder("[");
         for (int i = 0; i < length; i++) {
