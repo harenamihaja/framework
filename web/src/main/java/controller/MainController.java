@@ -51,7 +51,7 @@ public class MainController {
             age = (Integer) data.get("age");
         }
 
-        mv.addObject("id", age);
+        mv.addObject("age", age);
         mv.addObject("name", name);
         return mv;
     }
