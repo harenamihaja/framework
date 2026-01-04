@@ -20,12 +20,19 @@ import com.monframework.annotations.JsonResponse;
 @Controller
 public class MainController {
 
+    @UrlMapping(url = "/upload-form")
+    public ModelView afficherUpload() {
+        ModelView mv = new ModelView();
+        //    mv.setView("/WEB-INF/views/home.jsp");
+        mv.setView("views/form-upload.jsp");
 
-    @GetMapping("/api/employe/{id}")
-    @JsonResponse
-    public Employe getEmployeById(@PathVariable("id") int id) {
-        return Employe.findById(id); // suppose que tu as cette méthode
+        return mv;
     }
+    // @GetMapping("/api/employe/{id}")
+    // @JsonResponse
+    // public Employe getEmployeById(@PathVariable("id") int id) {
+    //     return Employe.findById(id); // suppose que tu as cette méthode
+    // }
     @GetMapping("/api/employes")
     @JsonResponse
     public List<Employe> getAllEmployes() {
