@@ -4,6 +4,8 @@ public class Paiement {
     int id;
     Employe employe;
     double montant;
+    public Paiement() {
+    }
     public Paiement(int id, Employe employe, double montant) {
         this.id = id;
         this.employe = employe;
@@ -15,11 +17,11 @@ public class Paiement {
     public void setId(int id) {
         this.id = id;
     }
-    public Employe getIdEmploye() {
+    public Employe getEmploye() {
         return employe;
     }
-    public void setIdEmploye(Employe idEmploye) {
-        this.employe = idEmploye;
+    public void setEmploye(Employe employe) {
+        this.employe = employe;
     }
     public double getMontant() {
         return montant;

@@ -1,5 +1,6 @@
 package controller;
 
+import java.util.List;
 import java.util.Map;
 
 import com.monframework.annotations.Controller;
@@ -8,16 +9,33 @@ import com.monframework.annotations.PostMapping;
 import com.monframework.annotations.RequestParam;
 import com.monframework.annotations.UrlMapping;
 import com.monframework.models.ModelView;
+import model.Employe;
+import model.Paiement;
+
 import com.monframework.annotations.GetMapping;
 
 @Controller
 public class MainController {
 
-    // @UrlMapping(url = "/home")
-    // public String afficherAccueil() {
-    //     System.out.println(" Accueil affiché !");
-    //     return "<h1>Hello depuis la méthode Home !</h1>";
-    // }
+    @GetMapping("/save-paiement")
+    public ModelView save(Paiement paiement) {
+        System.out.println("Paiement reçu : " + paiement.getMontant()
+                + ", Employé : " + paiement.getEmploye().getId() + " - " + paiement.getEmploye().getNom());
+        // sauvegarde...
+        return new ModelView("home.jsp");
+    }
+
+    @UrlMapping(url = "/formEmploye")
+    public ModelView afficherFormEmploye() {
+        ModelView mv = new ModelView();
+        List<Employe> employes = new Employe().getAllEmploye();
+     //   mv.addObject("employes", employes);
+        //    mv.setView("/WEB-INF/views/home.jsp");
+        mv.setView("views/form_employe.jsp");
+
+        return mv;
+    }
+
     @UrlMapping(url = "/home")
     public ModelView afficherAccueil() {
         ModelView mv = new ModelView();

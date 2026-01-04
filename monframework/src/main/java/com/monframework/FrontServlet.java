@@ -338,45 +338,105 @@ public class FrontServlet extends HttpServlet {
 
         return instance;
     }
+private void applyValuesToObject(Object obj, Map<String, String> params) throws Exception {
+    if (obj == null || params == null || params.isEmpty()) {
+        return;
+    }
 
-    private void applyValuesToObject(Object obj, Map<String, String> params) throws Exception {
-        if (obj == null || params.isEmpty()) return;
+    Class<?> clazz = obj.getClass();
 
-        Class<?> clazz = obj.getClass();
+    for (Map.Entry<String, String> entry : params.entrySet()) {
+        String keyPath = entry.getKey();
+        String valueStr = entry.getValue();
 
-        for (Map.Entry<String, String> entry : params.entrySet()) {
-            String keyPath = entry.getKey();
-            String valueStr = entry.getValue();
-            if (valueStr == null || valueStr.isEmpty()) continue;
+        if (valueStr == null || valueStr.trim().isEmpty()) {
+            continue;
+        }
 
-            String[] parts = keyPath.split("\\.", 2);
-            String property = parts[0];
-            String subPath = parts.length > 1 ? parts[1] : null;
+        valueStr = valueStr.trim();
 
-            String setterName = "set" + property.substring(0, 1).toUpperCase() + property.substring(1);
-            Method setter = findSetter(clazz, setterName);
+        String[] parts = keyPath.split("\\.", 2);
+        String property = parts[0];
+        String subPath = parts.length > 1 ? parts[1] : null;
 
-            if (setter == null) continue;
+        String setterName = "set" + property.substring(0, 1).toUpperCase() + property.substring(1);
+        Method setter = findSetter(clazz, setterName);
 
-            Class<?> paramType = setter.getParameterTypes()[0];
+        if (setter == null) {
+            System.out.println("Warning: Setter non trouvé pour '" + property + "' dans " + clazz.getSimpleName());
+            continue;
+        }
 
-            if (subPath != null) {
-                Object nestedObj = setter.invoke(obj);
-                if (nestedObj == null) {
-                    nestedObj = paramType.getDeclaredConstructor().newInstance();
-                    setter.invoke(obj, nestedObj);
-                }
-                Map<String, String> subMap = new HashMap<>();
-                subMap.put(subPath, valueStr);
-                applyValuesToObject(nestedObj, subMap);
-            } else {
+        Class<?> paramType = setter.getParameterTypes()[0];
+
+        if (subPath != null) {
+            // === CAS IMBRIQUÉ ===
+            // Trouver le GETTER pour récupérer l'objet existant
+            String getterName = "get" + property.substring(0, 1).toUpperCase() + property.substring(1);
+            Method getter = findGetter(clazz, getterName);
+            
+            Object nestedObj = null;
+            if (getter != null) {
+                nestedObj = getter.invoke(obj);
+            }
+
+            // Si l'objet n'existe pas encore, le créer
+            if (nestedObj == null) {
+                nestedObj = paramType.getDeclaredConstructor().newInstance();
+                setter.invoke(obj, new Object[]{nestedObj});
+            }
+
+            // Appliquer récursivement les valeurs sur l'objet imbriqué
+            Map<String, String> subMap = new HashMap<>();
+            subMap.put(subPath, valueStr);
+            applyValuesToObject(nestedObj, subMap);
+
+        } else {
+            // === CAS SIMPLE ===
+            try {
                 Object value = convertStringToType(valueStr, paramType);
-                setter.invoke(obj, value);
+
+                if (paramType.isPrimitive() && value instanceof Number) {
+                    if (paramType == int.class) {
+                        setter.invoke(obj, new Object[]{((Number) value).intValue()});
+                    } else if (paramType == double.class) {
+                        setter.invoke(obj, new Object[]{((Number) value).doubleValue()});
+                    } else if (paramType == long.class) {
+                        setter.invoke(obj, new Object[]{((Number) value).longValue()});
+                    } else if (paramType == float.class) {
+                        setter.invoke(obj, new Object[]{((Number) value).floatValue()});
+                    } else if (paramType == short.class) {
+                        setter.invoke(obj, new Object[]{((Number) value).shortValue()});
+                    } else if (paramType == byte.class) {
+                        setter.invoke(obj, new Object[]{((Number) value).byteValue()});
+                    } else if (paramType == boolean.class) {
+                        setter.invoke(obj, new Object[]{value});
+                    } else {
+                        setter.invoke(obj, new Object[]{value});
+                    }
+                } else {
+                    setter.invoke(obj, new Object[]{value});
+                }
+            } catch (NumberFormatException e) {
+                System.out.println("Erreur de conversion : '" + valueStr + "' → " + paramType.getSimpleName() + " (" + property + ")");
+            } catch (Exception e) {
+                System.out.println("Erreur lors de l'appel au setter " + setterName + " : " + e.getMessage());
+                e.printStackTrace();
             }
         }
     }
+}
 
-    private Method findSetter(Class<?> clazz, String setterName) {
+// Ajouter cette méthode pour trouver le getter
+private Method findGetter(Class<?> clazz, String getterName) {
+    for (Method m : clazz.getMethods()) {
+        if (m.getName().equals(getterName) && m.getParameterCount() == 0) {
+            return m;
+        }
+    }
+    return null;
+}   
+ private Method findSetter(Class<?> clazz, String setterName) {
         for (Method m : clazz.getMethods()) {
             if (m.getName().equals(setterName) && m.getParameterCount() == 1) {
                 return m;
@@ -384,17 +444,38 @@ public class FrontServlet extends HttpServlet {
         }
         return null;
     }
+private Object convertStringToType(String value, Class<?> targetType) {
+    if (value == null || value.isEmpty()) return null;
 
-    private Object convertStringToType(String value, Class<?> targetType) {
-        if (value == null) return null;
-        if (targetType == String.class) return value;
-        if (targetType == int.class || targetType == Integer.class) return Integer.parseInt(value);
-        if (targetType == double.class || targetType == Double.class) return Double.parseDouble(value);
-        if (targetType == long.class || targetType == Long.class) return Long.parseLong(value);
-        if (targetType == boolean.class || targetType == Boolean.class) return Boolean.parseBoolean(value);
-        return value;
+    String trimmed = value.trim();
+
+    if (targetType == String.class) {
+        return trimmed;
+    }
+    if (targetType == int.class || targetType == Integer.class) {
+        return Integer.valueOf(trimmed);
+    }
+    if (targetType == long.class || targetType == Long.class) {
+        return Long.valueOf(trimmed);
+    }
+    if (targetType == double.class || targetType == Double.class) {
+        return Double.valueOf(trimmed);
+    }
+    if (targetType == float.class || targetType == Float.class) {
+        return Float.valueOf(trimmed);
+    }
+    if (targetType == boolean.class || targetType == Boolean.class) {
+        return Boolean.valueOf(trimmed);
+    }
+    if (targetType == short.class || targetType == Short.class) {
+        return Short.valueOf(trimmed);
+    }
+    if (targetType == byte.class || targetType == Byte.class) {
+        return Byte.valueOf(trimmed);
     }
 
+    return trimmed; // fallback
+}
     // ==================== FIN DES MÉTHODES UTILITAIRES ====================
 
     private void showRouteList(HttpServletRequest req, HttpServletResponse resp) throws IOException {
