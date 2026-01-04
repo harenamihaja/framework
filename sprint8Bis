@@ -1,0 +1,31 @@
+maintenat je veux ajouter une nouvelle fonctionnalité sans impacter ce qui existe, au lieu d'envoyer Map<String,Object>,
+ je voudrais comme argument l'object dans le controller , donc il faut utiliser reflect, 
+pour pouvoir creer l'objet qui convient à partir des requetes   à utiliser pour des insertions comme ce que je vais donner en bas
+ 
+dans mon projet de test j'ai crée un model classe Employe avec des getters et setters et classe Paiement , 
+je souhaite faire une insertion de Paiement à partir d'un formulaire conforme aux attributs de ma classe avec list deroulante d'employe,
+   donne etape par etape
+dans le formulaire pour pour chaque input pour definir les name je vais ajouter des syntaxes
+ qui me permettront de reconnaitre si cet input correspond à une classe existante dans le model, 
+ par exemple input type= text   name= paiement.montant
+Java
+textpackage model;
+
+public class Employe {
+    public Employe(String nom, int age) {
+        this.nom = nom;
+        this.age = age;
+    }
+    private String nom;
+    private int age;}
+ 
+Java
+textpublic class Paiement {
+    int id;
+    Employe employe;
+    double montant;
+    public Paiement(int id, Employe employe, double montant) {
+        this.id = id;
+        this.employe = employe;
+        this.montant = montant;
+    }}

@@ -52,23 +52,31 @@ mkdir build
 mkdir build\WEB-INF
 mkdir build\WEB-INF\classes
 mkdir build\WEB-INF\lib
-mkdir build\WEB-INF\classes\controller
 
 :: Copier le jar du framework dans WEB-INF/lib
 copy "%root%\%framework%\framework.jar" "build\WEB-INF\lib\" >nul
 
-:: Compiler les classes de la webapp
-"%JAVAC%"  -parameters  -cp "lib/*;build\WEB-INF\lib\*" -d build\WEB-INF\classes\ src\main\java\controller\*.java
-"%JAVAC%"  -parameters  -cp "lib/*;build\WEB-INF\lib\*;build\WEB-INF\classes\*;build\WEB-INF\classes\controller\*" -d build\WEB-INF\classes src\main\java\*.java
+:: Étape 1 : Compiler TOUTES les classes Java en UNE SEULE passe
+:: C'est plus simple, plus fiable et évite les problèmes de dépendances
+"%JAVAC%" -parameters ^
+  -cp "lib/*;build\WEB-INF\lib\*" ^
+  -d build\WEB-INF\classes ^
+  src\main\java\model\*.java ^
+  src\main\java\controller\*.java ^
+  src\main\java\*.java
+
+:: Vérifier si la compilation a réussi
 if %errorlevel% neq 0 (
     echo Erreur lors de la compilation de la webapp
     exit /b 1
 )
 
-:: Copier web.xml et JSP/HTML
-xcopy /y /s /e "src\main\webapp\WEB-INF\web.xml" "build\WEB-INF" >nul
-xcopy /y /s /e "src\main\webapp\*.jsp" "build" >nul
-xcopy /y /s /e "src\main\webapp\*.html" "build" >nul
+:: Copier web.xml et les vues
+xcopy /y /s /e "src\main\webapp\WEB-INF\web.xml" "build\WEB-INF\" >nul
+xcopy /y /s /e "src\main\webapp\*.jsp" "build\" >nul
+xcopy /y /s /e "src\main\webapp\*.html" "build\" >nul
+xcopy /y /s /e "src\main\webapp\css" "build\css\" >nul 2>nul
+xcopy /y /s /e "src\main\webapp\js" "build\js\" >nul 2>nul
 
 :: ==============================
 :: 3) Créer le fichier WAR
