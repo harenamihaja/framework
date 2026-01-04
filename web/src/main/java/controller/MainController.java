@@ -7,15 +7,30 @@ import com.monframework.annotations.Controller;
 import com.monframework.annotations.PathVariable;
 import com.monframework.annotations.PostMapping;
 import com.monframework.annotations.RequestParam;
+import com.monframework.annotations.JsonResponse;
+
 import com.monframework.annotations.UrlMapping;
 import com.monframework.models.ModelView;
 import model.Employe;
 import model.Paiement;
 
 import com.monframework.annotations.GetMapping;
+import com.monframework.annotations.JsonResponse;
 
 @Controller
 public class MainController {
+
+
+    @GetMapping("/api/employe/{id}")
+    @JsonResponse
+    public Employe getEmployeById(@PathVariable("id") int id) {
+        return Employe.findById(id); // suppose que tu as cette méthode
+    }
+    @GetMapping("/api/employes")
+    @JsonResponse
+    public List<Employe> getAllEmployes() {
+        return new Employe().getAllEmploye();
+    }
 
     @GetMapping("/save-paiement")
     public ModelView save(Paiement paiement) {
@@ -29,7 +44,7 @@ public class MainController {
     public ModelView afficherFormEmploye() {
         ModelView mv = new ModelView();
         List<Employe> employes = new Employe().getAllEmploye();
-     //   mv.addObject("employes", employes);
+        //   mv.addObject("employes", employes);
         //    mv.setView("/WEB-INF/views/home.jsp");
         mv.setView("views/form_employe.jsp");
 

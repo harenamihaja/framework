@@ -12,6 +12,7 @@ import java.lang.reflect.Parameter;
 import com.monframework.scanner.Route;
 import com.monframework.models.ModelView;
 import com.monframework.scanner.ControllerScanner;
+import com.monframework.annotations.JsonResponse;
 import com.monframework.exceptions.MethodNotAllowedException;
 
 import java.util.ArrayList;
@@ -118,7 +119,9 @@ public class FrontServlet extends HttpServlet {
                         }
                     }
                 }
-                if (matchedRoute != null) break;
+                if (matchedRoute != null) {
+                    break;
+                }
             }
         }
 
@@ -149,7 +152,7 @@ public class FrontServlet extends HttpServlet {
             throws ServletException, IOException {
         try {
             Object controller = route.getController().getDeclaredConstructor().newInstance();
-            Method method = route.getMethod();
+            Method method = route.getMethod(); // Déclaré une seule fois
 
             Map<String, String[]> parameterMap = req.getParameterMap();
             @SuppressWarnings("unchecked")
@@ -158,29 +161,27 @@ public class FrontServlet extends HttpServlet {
 
             Object result;
 
+            // === INVOQUER LA MÉTHODE DU CONTROLLER ===
             if (method.getParameterCount() == 0) {
                 result = method.invoke(controller);
             } else {
                 Parameter[] parameters = method.getParameters();
 
-                // Détection des types de paramètres
                 boolean hasMapParameter = false;
                 int mapParamIndex = -1;
                 boolean hasModelObjectParameter = false;
                 int modelParamIndex = -1;
                 Class<?> modelClass = null;
 
+                // Détection des types spéciaux de paramètres
                 for (int i = 0; i < parameters.length; i++) {
                     Parameter param = parameters[i];
 
-                    // Cas Map<String, Object>
-                    if (Map.class.isAssignableFrom(param.getType()) &&
-                        "java.util.Map<java.lang.String, java.lang.Object>".equals(param.getParameterizedType().getTypeName())) {
+                    if (Map.class.isAssignableFrom(param.getType())
+                            && "java.util.Map<java.lang.String, java.lang.Object>".equals(param.getParameterizedType().getTypeName())) {
                         hasMapParameter = true;
                         mapParamIndex = i;
-                    }
-                    // Cas objet modèle (package model)
-                    else if (isModelClass(param.getType())) {
+                    } else if (isModelClass(param.getType())) {
                         if (hasModelObjectParameter) {
                             throw new ServletException("Un seul paramètre objet modèle autorisé par méthode.");
                         }
@@ -192,8 +193,8 @@ public class FrontServlet extends HttpServlet {
 
                 Object[] args = new Object[parameters.length];
 
-                // === CAS 1 : Map<String, Object> ===
                 if (hasMapParameter) {
+                    // === CAS 1 : Map<String, Object> ===
                     Map<String, Object> requestData = new HashMap<>();
                     for (Map.Entry<String, String[]> entry : parameterMap.entrySet()) {
                         String key = entry.getKey();
@@ -204,24 +205,16 @@ public class FrontServlet extends HttpServlet {
                         requestData.putAll(routeParams);
                     }
                     args[mapParamIndex] = requestData;
-                    for (int i = 0; i < args.length; i++) {
-                        if (i != mapParamIndex) args[i] = null;
-                    }
                     result = method.invoke(controller, args);
 
-                }
-                // === CAS 2 : Objet modèle (nouvelle fonctionnalité) ===
-                else if (hasModelObjectParameter) {
+                } else if (hasModelObjectParameter) {
+                    // === CAS 2 : Binding d'objet modèle ===
                     Object modelObject = buildModelObject(modelClass, parameterMap, routeParams);
                     args[modelParamIndex] = modelObject;
-                    for (int i = 0; i < args.length; i++) {
-                        if (i != modelParamIndex) args[i] = null;
-                    }
                     result = method.invoke(controller, args);
 
-                }
-                // === CAS 3 : Comportement classique (@RequestParam, PathVariable) ===
-                else {
+                } else {
+                    // === CAS 3 : Paramètres classiques (@RequestParam / @PathVariable) ===
                     Object[] argsClassic = new Object[parameters.length];
                     for (int i = 0; i < parameters.length; i++) {
                         Parameter param = parameters[i];
@@ -258,11 +251,16 @@ public class FrontServlet extends HttpServlet {
                         }
 
                         Object value = switch (type.getSimpleName()) {
-                            case "int", "Integer" -> Integer.parseInt(valueStr);
-                            case "long", "Long" -> Long.parseLong(valueStr);
-                            case "double", "Double" -> Double.parseDouble(valueStr);
-                            case "boolean", "Boolean" -> Boolean.parseBoolean(valueStr);
-                            default -> valueStr;
+                            case "int", "Integer" ->
+                                Integer.parseInt(valueStr);
+                            case "long", "Long" ->
+                                Long.parseLong(valueStr);
+                            case "double", "Double" ->
+                                Double.parseDouble(valueStr);
+                            case "boolean", "Boolean" ->
+                                Boolean.parseBoolean(valueStr);
+                            default ->
+                                valueStr;
                         };
 
                         argsClassic[i] = value;
@@ -272,24 +270,45 @@ public class FrontServlet extends HttpServlet {
                 }
             }
 
-            // Gestion du retour
+            // === GESTION DU RETOUR DE LA MÉTHODE ===
             if (result instanceof ModelView mv) {
                 String view = mv.getView();
                 if (view == null || view.isEmpty()) {
                     throw new ServletException("ModelView sans vue définie");
                 }
                 mv.getMapData().forEach(req::setAttribute);
-                req.getRequestDispatcher(view).forward(req, resp);
+                RequestDispatcher dispatcher = req.getRequestDispatcher(view);
+                dispatcher.forward(req, resp);
+
             } else if (result instanceof String str) {
                 resp.setContentType("text/html; charset=UTF-8");
                 resp.getWriter().println(str);
-            } else if (result == null) {
-                throw new ServletException("Méthode retourne void. Attendu : ModelView ou String");
+
+            } else if (result != null) {
+                // === RETOUR JSON avec @JsonResponse ===
+                if (method.isAnnotationPresent(JsonResponse.class)) {
+                    resp.setContentType("application/json; charset=UTF-8");
+                    resp.setStatus(HttpServletResponse.SC_OK);
+                    PrintWriter out = resp.getWriter();
+                    out.print(toJson(result));
+                    out.flush();
+                } else {
+                    throw new ServletException("Type de retour non supporté sans @JsonResponse : " + result.getClass().getName()
+                            + ". Utilisez ModelView, String ou annotez la méthode avec @JsonResponse.");
+                }
+
             } else {
-                throw new ServletException("Type de retour non supporté : " + result.getClass());
+                // result == null (void)
+                if (method.isAnnotationPresent(JsonResponse.class)) {
+                    resp.setContentType("application/json; charset=UTF-8");
+                    resp.setStatus(HttpServletResponse.SC_NO_CONTENT);
+                } else {
+                    throw new ServletException("Méthode retourne void sans @JsonResponse. Attendu : ModelView, String ou objet annoté @JsonResponse.");
+                }
             }
 
         } catch (Exception e) {
+            // Gestion centralisée des erreurs
             resp.setStatus(500);
             resp.setContentType("text/html; charset=UTF-8");
             PrintWriter out = resp.getWriter();
@@ -301,7 +320,6 @@ public class FrontServlet extends HttpServlet {
     }
 
     // ==================== MÉTHODES UTILITAIRES POUR LE BINDING D'OBJETS MODÈLE ====================
-
     private boolean isModelClass(Class<?> clazz) {
         Package pkg = clazz.getPackage();
         return pkg != null && pkg.getName().startsWith("model");
@@ -338,105 +356,107 @@ public class FrontServlet extends HttpServlet {
 
         return instance;
     }
-private void applyValuesToObject(Object obj, Map<String, String> params) throws Exception {
-    if (obj == null || params == null || params.isEmpty()) {
-        return;
-    }
 
-    Class<?> clazz = obj.getClass();
-
-    for (Map.Entry<String, String> entry : params.entrySet()) {
-        String keyPath = entry.getKey();
-        String valueStr = entry.getValue();
-
-        if (valueStr == null || valueStr.trim().isEmpty()) {
-            continue;
+    private void applyValuesToObject(Object obj, Map<String, String> params) throws Exception {
+        if (obj == null || params == null || params.isEmpty()) {
+            return;
         }
 
-        valueStr = valueStr.trim();
+        Class<?> clazz = obj.getClass();
 
-        String[] parts = keyPath.split("\\.", 2);
-        String property = parts[0];
-        String subPath = parts.length > 1 ? parts[1] : null;
+        for (Map.Entry<String, String> entry : params.entrySet()) {
+            String keyPath = entry.getKey();
+            String valueStr = entry.getValue();
 
-        String setterName = "set" + property.substring(0, 1).toUpperCase() + property.substring(1);
-        Method setter = findSetter(clazz, setterName);
-
-        if (setter == null) {
-            System.out.println("Warning: Setter non trouvé pour '" + property + "' dans " + clazz.getSimpleName());
-            continue;
-        }
-
-        Class<?> paramType = setter.getParameterTypes()[0];
-
-        if (subPath != null) {
-            // === CAS IMBRIQUÉ ===
-            // Trouver le GETTER pour récupérer l'objet existant
-            String getterName = "get" + property.substring(0, 1).toUpperCase() + property.substring(1);
-            Method getter = findGetter(clazz, getterName);
-            
-            Object nestedObj = null;
-            if (getter != null) {
-                nestedObj = getter.invoke(obj);
+            if (valueStr == null || valueStr.trim().isEmpty()) {
+                continue;
             }
 
-            // Si l'objet n'existe pas encore, le créer
-            if (nestedObj == null) {
-                nestedObj = paramType.getDeclaredConstructor().newInstance();
-                setter.invoke(obj, new Object[]{nestedObj});
+            valueStr = valueStr.trim();
+
+            String[] parts = keyPath.split("\\.", 2);
+            String property = parts[0];
+            String subPath = parts.length > 1 ? parts[1] : null;
+
+            String setterName = "set" + property.substring(0, 1).toUpperCase() + property.substring(1);
+            Method setter = findSetter(clazz, setterName);
+
+            if (setter == null) {
+                System.out.println("Warning: Setter non trouvé pour '" + property + "' dans " + clazz.getSimpleName());
+                continue;
             }
 
-            // Appliquer récursivement les valeurs sur l'objet imbriqué
-            Map<String, String> subMap = new HashMap<>();
-            subMap.put(subPath, valueStr);
-            applyValuesToObject(nestedObj, subMap);
+            Class<?> paramType = setter.getParameterTypes()[0];
 
-        } else {
-            // === CAS SIMPLE ===
-            try {
-                Object value = convertStringToType(valueStr, paramType);
+            if (subPath != null) {
+                // === CAS IMBRIQUÉ ===
+                // Trouver le GETTER pour récupérer l'objet existant
+                String getterName = "get" + property.substring(0, 1).toUpperCase() + property.substring(1);
+                Method getter = findGetter(clazz, getterName);
 
-                if (paramType.isPrimitive() && value instanceof Number) {
-                    if (paramType == int.class) {
-                        setter.invoke(obj, new Object[]{((Number) value).intValue()});
-                    } else if (paramType == double.class) {
-                        setter.invoke(obj, new Object[]{((Number) value).doubleValue()});
-                    } else if (paramType == long.class) {
-                        setter.invoke(obj, new Object[]{((Number) value).longValue()});
-                    } else if (paramType == float.class) {
-                        setter.invoke(obj, new Object[]{((Number) value).floatValue()});
-                    } else if (paramType == short.class) {
-                        setter.invoke(obj, new Object[]{((Number) value).shortValue()});
-                    } else if (paramType == byte.class) {
-                        setter.invoke(obj, new Object[]{((Number) value).byteValue()});
-                    } else if (paramType == boolean.class) {
-                        setter.invoke(obj, new Object[]{value});
+                Object nestedObj = null;
+                if (getter != null) {
+                    nestedObj = getter.invoke(obj);
+                }
+
+                // Si l'objet n'existe pas encore, le créer
+                if (nestedObj == null) {
+                    nestedObj = paramType.getDeclaredConstructor().newInstance();
+                    setter.invoke(obj, new Object[]{nestedObj});
+                }
+
+                // Appliquer récursivement les valeurs sur l'objet imbriqué
+                Map<String, String> subMap = new HashMap<>();
+                subMap.put(subPath, valueStr);
+                applyValuesToObject(nestedObj, subMap);
+
+            } else {
+                // === CAS SIMPLE ===
+                try {
+                    Object value = convertStringToType(valueStr, paramType);
+
+                    if (paramType.isPrimitive() && value instanceof Number) {
+                        if (paramType == int.class) {
+                            setter.invoke(obj, new Object[]{((Number) value).intValue()});
+                        } else if (paramType == double.class) {
+                            setter.invoke(obj, new Object[]{((Number) value).doubleValue()});
+                        } else if (paramType == long.class) {
+                            setter.invoke(obj, new Object[]{((Number) value).longValue()});
+                        } else if (paramType == float.class) {
+                            setter.invoke(obj, new Object[]{((Number) value).floatValue()});
+                        } else if (paramType == short.class) {
+                            setter.invoke(obj, new Object[]{((Number) value).shortValue()});
+                        } else if (paramType == byte.class) {
+                            setter.invoke(obj, new Object[]{((Number) value).byteValue()});
+                        } else if (paramType == boolean.class) {
+                            setter.invoke(obj, new Object[]{value});
+                        } else {
+                            setter.invoke(obj, new Object[]{value});
+                        }
                     } else {
                         setter.invoke(obj, new Object[]{value});
                     }
-                } else {
-                    setter.invoke(obj, new Object[]{value});
+                } catch (NumberFormatException e) {
+                    System.out.println("Erreur de conversion : '" + valueStr + "' → " + paramType.getSimpleName() + " (" + property + ")");
+                } catch (Exception e) {
+                    System.out.println("Erreur lors de l'appel au setter " + setterName + " : " + e.getMessage());
+                    e.printStackTrace();
                 }
-            } catch (NumberFormatException e) {
-                System.out.println("Erreur de conversion : '" + valueStr + "' → " + paramType.getSimpleName() + " (" + property + ")");
-            } catch (Exception e) {
-                System.out.println("Erreur lors de l'appel au setter " + setterName + " : " + e.getMessage());
-                e.printStackTrace();
             }
         }
     }
-}
 
 // Ajouter cette méthode pour trouver le getter
-private Method findGetter(Class<?> clazz, String getterName) {
-    for (Method m : clazz.getMethods()) {
-        if (m.getName().equals(getterName) && m.getParameterCount() == 0) {
-            return m;
+    private Method findGetter(Class<?> clazz, String getterName) {
+        for (Method m : clazz.getMethods()) {
+            if (m.getName().equals(getterName) && m.getParameterCount() == 0) {
+                return m;
+            }
         }
+        return null;
     }
-    return null;
-}   
- private Method findSetter(Class<?> clazz, String setterName) {
+
+    private Method findSetter(Class<?> clazz, String setterName) {
         for (Method m : clazz.getMethods()) {
             if (m.getName().equals(setterName) && m.getParameterCount() == 1) {
                 return m;
@@ -444,38 +464,41 @@ private Method findGetter(Class<?> clazz, String getterName) {
         }
         return null;
     }
-private Object convertStringToType(String value, Class<?> targetType) {
-    if (value == null || value.isEmpty()) return null;
 
-    String trimmed = value.trim();
+    private Object convertStringToType(String value, Class<?> targetType) {
+        if (value == null || value.isEmpty()) {
+            return null;
+        }
 
-    if (targetType == String.class) {
-        return trimmed;
-    }
-    if (targetType == int.class || targetType == Integer.class) {
-        return Integer.valueOf(trimmed);
-    }
-    if (targetType == long.class || targetType == Long.class) {
-        return Long.valueOf(trimmed);
-    }
-    if (targetType == double.class || targetType == Double.class) {
-        return Double.valueOf(trimmed);
-    }
-    if (targetType == float.class || targetType == Float.class) {
-        return Float.valueOf(trimmed);
-    }
-    if (targetType == boolean.class || targetType == Boolean.class) {
-        return Boolean.valueOf(trimmed);
-    }
-    if (targetType == short.class || targetType == Short.class) {
-        return Short.valueOf(trimmed);
-    }
-    if (targetType == byte.class || targetType == Byte.class) {
-        return Byte.valueOf(trimmed);
-    }
+        String trimmed = value.trim();
 
-    return trimmed; // fallback
-}
+        if (targetType == String.class) {
+            return trimmed;
+        }
+        if (targetType == int.class || targetType == Integer.class) {
+            return Integer.valueOf(trimmed);
+        }
+        if (targetType == long.class || targetType == Long.class) {
+            return Long.valueOf(trimmed);
+        }
+        if (targetType == double.class || targetType == Double.class) {
+            return Double.valueOf(trimmed);
+        }
+        if (targetType == float.class || targetType == Float.class) {
+            return Float.valueOf(trimmed);
+        }
+        if (targetType == boolean.class || targetType == Boolean.class) {
+            return Boolean.valueOf(trimmed);
+        }
+        if (targetType == short.class || targetType == Short.class) {
+            return Short.valueOf(trimmed);
+        }
+        if (targetType == byte.class || targetType == Byte.class) {
+            return Byte.valueOf(trimmed);
+        }
+
+        return trimmed; // fallback
+    }
     // ==================== FIN DES MÉTHODES UTILITAIRES ====================
 
     private void showRouteList(HttpServletRequest req, HttpServletResponse resp) throws IOException {
@@ -494,10 +517,14 @@ private Object convertStringToType(String value, Class<?> targetType) {
 
                     routes.forEach(r -> {
                         String methodColor = switch (r.getHttpMethod()) {
-                            case "GET" -> "#28a745";
-                            case "POST" -> "#dc3545";
-                            case "ANY" -> "#6f42c1";
-                            default -> "#000000";
+                            case "GET" ->
+                                "#28a745";
+                            case "POST" ->
+                                "#dc3545";
+                            case "ANY" ->
+                                "#6f42c1";
+                            default ->
+                                "#000000";
                         };
 
                         out.printf(
@@ -525,5 +552,139 @@ private Object convertStringToType(String value, Class<?> targetType) {
             }
         }
         return null;
+    }
+
+    private String toJson(Object obj) {
+        if (obj == null) {
+            return "null";
+        }
+
+        // === CAS SPÉCIAL : List → tableau JSON direct ===
+        if (obj instanceof List<?> list) {
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < list.size(); i++) {
+                if (i > 0) {
+                    sb.append(",");
+                }
+                sb.append(toJson(list.get(i)));
+            }
+            sb.append("]");
+            return sb.toString();
+        }
+
+        // === CAS SPÉCIAL : Tableau Java → tableau JSON direct ===
+        if (obj.getClass().isArray()) {
+            StringBuilder sb = new StringBuilder("[");
+            int length = java.lang.reflect.Array.getLength(obj);
+            for (int i = 0; i < length; i++) {
+                if (i > 0) {
+                    sb.append(",");
+                }
+                sb.append(toJson(java.lang.reflect.Array.get(obj, i)));
+            }
+            sb.append("]");
+            return sb.toString();
+        }
+
+        // === CAS SPÉCIAL : Types primitifs ou wrappers connus ===
+        if (obj instanceof String str) {
+            return "\"" + escapeJsonString(str) + "\"";
+        }
+        if (obj instanceof Number || obj instanceof Boolean) {
+            return obj.toString();
+        }
+
+        // === CAS GÉNÉRAL : Objet POJO → objet JSON { ... } ===
+        StringBuilder sb = new StringBuilder("{");
+        java.lang.reflect.Field[] fields = obj.getClass().getDeclaredFields();
+        boolean first = true;
+
+        for (java.lang.reflect.Field field : fields) {
+            // Ignorer les champs statiques, transitoires ou synthétiques
+            int modifiers = field.getModifiers();
+            if (java.lang.reflect.Modifier.isStatic(modifiers)
+                    || java.lang.reflect.Modifier.isTransient(modifiers)
+                    || field.isSynthetic()) {
+                continue;
+            }
+
+            field.setAccessible(true);
+            try {
+                Object value = field.get(obj);
+                if (value == null) {
+                    continue; // on n'inclut pas les champs null (tu peux changer si tu veux "null")
+                }
+
+                if (!first) {
+                    sb.append(",");
+                }
+                first = false;
+
+                sb.append("\"").append(field.getName()).append("\":");
+                sb.append(toJson(value)); // récursion pour gérer objets imbriqués, listes, etc.
+
+            } catch (IllegalAccessException e) {
+                // En cas d'erreur d'accès, on ignore ou on logue
+                if (!first) {
+                    sb.append(",");
+                }
+                first = false;
+                sb.append("\"").append(field.getName()).append("\":\"<access_error>\"");
+            }
+        }
+
+        sb.append("}");
+        return sb.toString();
+    }
+
+// Méthode utilitaire pour échapper les caractères spéciaux dans les strings JSON
+    private String escapeJsonString(String str) {
+        if (str == null) {
+            return "";
+        }
+        return str.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\b", "\\b")
+                .replace("\f", "\\f")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
+        // Pour plus de sécurité, tu peux ajouter d'autres échappements si besoin
+    }
+
+    private String listToJson(List<?> list) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < list.size(); i++) {
+            if (i > 0) {
+                sb.append(",");
+            }
+            Object item = list.get(i);
+            if (item instanceof String) {
+                sb.append("\"").append(escapeJsonString(item.toString())).append("\"");
+            } else {
+                sb.append(toJson(item));
+            }
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    private String arrayToJson(Object array) {
+        // Similaire à listToJson, mais avec reflection
+        int length = java.lang.reflect.Array.getLength(array);
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < length; i++) {
+            if (i > 0) {
+                sb.append(",");
+            }
+            Object item = java.lang.reflect.Array.get(array, i);
+            if (item instanceof String) {
+                sb.append("\"").append(escapeJsonString(item.toString())).append("\"");
+            } else {
+                sb.append(toJson(item));
+            }
+        }
+        sb.append("]");
+        return sb.toString();
     }
 }
