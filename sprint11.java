@@ -35,7 +35,7 @@ import jakarta.servlet.http.HttpSession; // Ajouté pour HttpSession
     maxFileSize = 1024 * 1024 * 10,       // 10MB
     maxRequestSize = 1024 * 1024 * 50     // 50MB
 )
-public class FrontServlet extends HttpServlet {
+public class sprint11 extends HttpServlet {
 
     private Map<String, List<Route>> routeMap = new HashMap<>();
     private static final String UPLOAD_DIR = "uploads";

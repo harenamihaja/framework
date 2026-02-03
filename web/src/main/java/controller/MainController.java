@@ -28,6 +28,7 @@ public class MainController {
 
         return mv;
     }
+
     // @GetMapping("/api/employe/{id}")
     // @JsonResponse
     // public Employe getEmployeById(@PathVariable("id") int id) {
@@ -53,7 +54,7 @@ public class MainController {
         List<Employe> employes = new Employe().getAllEmploye();
         //   mv.addObject("employes", employes);
         //    mv.setView("/WEB-INF/views/home.jsp");
-        mv.setView("views/form_employe.jsp");
+        mv.setView("views/session/form_employe.jsp");
 
         return mv;
     }
