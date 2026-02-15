@@ -89,7 +89,7 @@ public class SessionController {
         return mv;
     }
 
-    // ───────────────────────────────────────────────
+    // ───────────────────────────────────────────────x
     // 4. Ajouter un employé en session (panier sélection)
     // ───────────────────────────────────────────────
     @UrlMapping(url = "/ajouter")
