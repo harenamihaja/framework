@@ -56,6 +56,11 @@ mkdir build\WEB-INF\lib
 :: Copier le jar du framework dans WEB-INF/lib
 copy "%root%\%framework%\framework.jar" "build\WEB-INF\lib\" >nul
 
+:: Copier tous les jars présents dans web\lib vers build\WEB-INF\lib
+if exist "%root%\%web%\lib" (
+    xcopy /y /s /e "%root%\%web%\lib\*" "build\WEB-INF\lib\" >nul
+)
+
 :: Étape 1 : Compiler TOUTES les classes Java en UNE SEULE passe
 :: C'est plus simple, plus fiable et évite les problèmes de dépendances
 "%JAVAC%" -parameters ^

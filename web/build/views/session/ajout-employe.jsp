@@ -12,6 +12,6 @@
     <button type="submit">Ajouter à ma sélection</button>
 </form>
 
-<p><a href="${pageContext.request.contextPath}/employes">← Retour à la liste</a></p>
+<p><a href="ajouter">← Retour à la liste</a></p>
 </body>
 </html>

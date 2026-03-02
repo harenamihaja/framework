@@ -1,0 +1,190 @@
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sprint 11 - Test Session</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            padding: 50px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 36px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        
+        .feature-box {
+            background: #f9f9f9;
+            padding: 25px;
+            margin: 20px 0;
+            border-radius: 5px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .feature-box h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        
+        .feature-box p {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+        
+        .code {
+            background: #222;
+            color: #0f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            text-align: left;
+            overflow-x: auto;
+            margin-top: 10px;
+        }
+        
+        .button-group {
+            margin-top: 40px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        a.btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+            border: 1px solid #ddd;
+        }
+        
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        
+        .icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">🎯</div>
+        <h1>Sprint 11</h1>
+        <p class="subtitle">Test de la fonctionnalité Session avec l'annotation <code>@Session</code></p>
+        
+        <div class="feature-box">
+            <h3>📌 Qu'est-ce que c'est?</h3>
+            <p>
+                L'annotation <strong>@Session</strong> permet d'annoter un argument de fonction dans une méthode d'une classe <strong>@Controller</strong>.
+            </p>
+            <p style="margin-bottom: 0;">
+                L'argument doit impérativement être de type <strong>Map&lt;String, Object&gt;</strong>. 
+                Vous pouvez accéder aux variables de HttpSession depuis ce Map.
+            </p>
+        </div>
+        
+        <div class="feature-box">
+            <h3>⚙️ Comment ça marche?</h3>
+            <p>
+                <strong>1. À la réception de la requête:</strong><br>
+                → HttpSession est copié dans un Map
+            </p>
+            <p>
+                <strong>2. Pendant l'exécution:</strong><br>
+                → Le Map est passé en argument à la méthode
+            </p>
+            <p style="margin-bottom: 0;">
+                <strong>3. Après exécution:</strong><br>
+                → Le contenu du Map est recopié dans HttpSession pour persister les changements
+            </p>
+        </div>
+        
+        <div class="feature-box">
+            <h3>💻 Exemple de code</h3>
+            <div class="code">
+@Controller
+public class SessionController {
+    @UrlMapping(url = "/session/ajouter")
+    public ModelView ajouter(
+            @RequestParam("nom") String nom,
+            @Session Map&lt;String, Object&gt; session) {
+        
+        // Accès et modification de la session
+        List&lt;String&gt; panier = 
+            (List) session.getOrDefault("panier", 
+                new ArrayList&lt;&gt;());
+        panier.add(nom);
+        session.put("panier", panier);
+        
+        return new ModelView(...);
+    }
+}
+            </div>
+        </div>
+        
+        <div class="button-group">
+            <a href="session/form" class="btn btn-primary">Commencer le test</a>
+            <a href="session/afficher" class="btn btn-secondary">Voir le panier</a>
+        </div>
+    </div>
+</body>
+</html>

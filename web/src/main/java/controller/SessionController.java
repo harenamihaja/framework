@@ -5,152 +5,98 @@ import java.util.List;
 import java.util.Map;
 
 import com.monframework.annotations.Controller;
-import com.monframework.annotations.PathVariable;
-import com.monframework.annotations.PostMapping;
 import com.monframework.annotations.RequestParam;
 import com.monframework.annotations.Session;
-import com.monframework.annotations.JsonResponse;
-
 import com.monframework.annotations.UrlMapping;
 import com.monframework.models.ModelView;
-import model.Employe;
-import model.Paiement;
-import com.monframework.annotations.GetMapping;
-import com.monframework.annotations.JsonResponse;
 
 @Controller
 public class SessionController {
 
-    // Simulation d'une "base de données" via la méthode du modèle
-    private List<Employe> getAllEmployesFromModel() {
-        Employe dummy = new Employe(); // juste pour appeler la méthode
-        return dummy.getAllEmploye();   // retourne la liste statique simulée
-    }
-// @UrlMapping(url = "/formTestEmploye")
-//     public ModelView afficherFormEmploye() {
-//         ModelView mv = new ModelView();
-//         List<Employe> employes = new Employe().getAllEmploye();
-//         //   mv.addObject("employes", employes);
-//         //    mv.setView("/WEB-INF/views/home.jsp");
-//         mv.setView("views/session/form_employe.jsp");
-
-//         return mv;
-//     }
     // ───────────────────────────────────────────────
-    // 1. Liste de tous les employés
+    // 1. Formulaire d'ajout de produit
     // ───────────────────────────────────────────────
-    @UrlMapping(url = "/employesTest")
-    public ModelView listeEmployes() {
+    @UrlMapping(url = "/session/form")
+    public ModelView afficherForm() {
         ModelView mv = new ModelView();
-        mv.setView("views/session/employes.jsp");
-
-        List<Employe> employes = getAllEmployesFromModel();
-        System.out.println("Liste des employés : " + employes.get(0).getNom());
-            System.out.println("Liste des employés : " + employes.get(1).getNom());
-
-        mv.addObject("employes", employes);
-        mv.addObject("titre", "Liste des employés");
-
+        mv.setView("/views/session/form-produit.jsp");
+        mv.addObject("titre", "Ajouter un produit au panier");
         return mv;
     }
 
     // ───────────────────────────────────────────────
-    // 2. Détail d'un employé (via id en paramètre)
+    // 2. Ajouter un produit en session (panier)
     // ───────────────────────────────────────────────
-    @UrlMapping(url = "/detail")
-    public ModelView detailEmploye(@RequestParam("id") Integer id) {
-        ModelView mv = new ModelView();
-        mv.setView("views/session/detail-employe.jsp");
-
-        List<Employe> all = getAllEmployesFromModel();
-
-        Employe found = all.stream()
-                .filter(e -> e.getId() == id)
-                .findFirst()
-                .orElse(null);
-
-        if (found != null) {
-            mv.addObject("employe", found);
-        } else {
-            mv.addObject("messageErreur", "Employé avec id " + id + " introuvable");
-        }
-
-        return mv;
-    }
-
-    // ───────────────────────────────────────────────
-    // 3. Formulaire d'ajout (affiche le form)
-    // ───────────────────────────────────────────────
-    @UrlMapping(url = "/ajouterEmploye")
-    public ModelView afficherFormAjout() {
-        ModelView mv = new ModelView();
-        mv.setView("views/session/ajout-employe.jsp");
-        mv.addObject("titre", "Ajouter un employé");
-        return mv;
-    }
-
-    // ───────────────────────────────────────────────x
-    // 4. Ajouter un employé en session (panier sélection)
-    // ───────────────────────────────────────────────
-    @UrlMapping(url = "/ajouter")
-    public ModelView ajouterEmployeEnSession(
+    @UrlMapping(url = "/session/ajouter")
+    public ModelView ajouterProduit(
             @RequestParam("nom") String nom,
-            @RequestParam("age") Integer age,
+            @RequestParam("prix") Double prix,
             @Session Map<String, Object> session) {
 
-        ModelView mv = new ModelView();
-        mv.setView("redirect:/employe/selectionnes");
-
-        // Création de l'employé
-        Employe nouvelEmploye = new Employe();
-        nouvelEmploye.setId((int) (Math.random() * 10000)); // simulation auto-incr
-        nouvelEmploye.setNom(nom);
-        nouvelEmploye.setAge(age);
+        System.out.println("=== Ajout en session ===");
+        System.out.println("Session avant: " + session);
 
         // Récupération ou création de la liste en session
         @SuppressWarnings("unchecked")
-        List<Employe> selection = (List<Employe>) session.getOrDefault("selectionEmployes", new ArrayList<>());
+        List<String> panier = (List<String>) session.getOrDefault("panier", new ArrayList<>());
 
-        selection.add(nouvelEmploye);
+        String produit = nom + " - " + prix + "€";
+        panier.add(produit);
 
         // Mise à jour en session
-        session.put("selectionEmployes", selection);
-        session.put("dernierAjout", nom + " (" + age + " ans)");
+        session.put("panier", panier);
+        session.put("nombreArticles", panier.size());
+        session.put("dernier", nom);
 
+        System.out.println("Session après: " + session);
+        System.out.println("=== Panier mis à jour ===");
+
+        ModelView mv = new ModelView();
+        mv.setView("redirect:/session/afficher");
         return mv;
     }
 
     // ───────────────────────────────────────────────
-    // 5. Voir les employés sélectionnés (en session)
+    // 3. Afficher le panier (données de la session)
     // ───────────────────────────────────────────────
-    @UrlMapping(url = "/employe/selectionnes")
-    public ModelView voirSelection(@Session Map<String, Object> session) {
+    @UrlMapping(url = "/session/afficher")
+    public ModelView afficherPanier(@Session Map<String, Object> session) {
+        System.out.println("=== Affichage panier ===");
+        System.out.println("Session: " + session);
+
         ModelView mv = new ModelView();
-        mv.setView("selection-employes.jsp");
+        mv.setView("../views/session/panier.jsp");
 
         @SuppressWarnings("unchecked")
-        List<Employe> selection = (List<Employe>) session.get("selectionEmployes");
+        List<String> panier = (List<String>) session.get("panier");
+        Integer nombreArticles = (Integer) session.get("nombreArticles");
+        String dernier = (String) session.get("dernier");
 
-        if (selection != null && !selection.isEmpty()) {
-            mv.addObject("selection", selection);
-            mv.addObject("message", "Employés sélectionnés : " + selection.size());
+        if (panier != null && !panier.isEmpty()) {
+            mv.addObject("panier", panier);
+            mv.addObject("nombreArticles", nombreArticles);
+            mv.addObject("dernier", dernier);
+            mv.addObject("message", "Panier : " + panier.size() + " article(s)");
         } else {
-            mv.addObject("message", "Aucun employé sélectionné pour le moment.");
+            mv.addObject("message", "Le panier est vide");
         }
 
         return mv;
     }
 
     // ───────────────────────────────────────────────
-    // 6. Vider la sélection (supprimer de la session)
+    // 4. Vider le panier (supprimer de la session)
     // ───────────────────────────────────────────────
-    @UrlMapping(url = "/employe/vider-selection")
-    public ModelView viderSelection(@Session Map<String, Object> session) {
-        session.remove("selectionEmployes");
-        session.remove("dernierAjout");
+    @UrlMapping(url = "/session/vider")
+    public ModelView viderPanier(@Session Map<String, Object> session) {
+        session.remove("panier");
+        session.remove("nombreArticles");
+        session.remove("dernier");
+
+        System.out.println("=== Panier vidé ===");
 
         ModelView mv = new ModelView();
-        mv.setView("redirect:/employe/selectionnes");
+        mv.setView("redirect:/session/afficher");
         return mv;
     }
 }
