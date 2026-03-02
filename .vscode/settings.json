@@ -1,0 +1,10 @@
+{
+    "java.project.sourcePaths": [
+        "web\\src\\main\\java"
+    ],
+    "java.project.referencedLibraries": [
+        "monframework\\framework.jar",
+        "e:\\ITU\\s5\\MrNaina\\sprint\\framework\\web\\lib\\servlet-api.jar",
+        "e:\\ITU\\s5\\MrNaina\\sprint\\framework\\web\\lib\\mysql-connector-j-9.1.0.jar"
+    ]
+}

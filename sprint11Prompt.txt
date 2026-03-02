@@ -1,3 +1,36 @@
+j'ai un projet de framework que j'ai crée qui a des similarités avec springboot,
+
+je veux implementer cette nouvelle fonctionnalité
+    - Session:
+        -on peut annoter un argument de fonction depuis une méthode d'une classe Controller avec
+        l'annotation @Session, l'argument doit impérativement
+        être de type Map<String, Object>, on peut accéder aux variables de HttpSession depuis ce Map
+        -dans FrontServlet lors de l'appel de la fonction (via reflect) si on a une variable de session,
+        on copie HttpSession dans un Map puis on donne ça en argument
+        a la méthode, puis après avoir executé la méthode on passe le contenu de la Map qu'on a
+        copié ensuite à HttpSession pour persister le changement
+
+        Schema:
+            -coté développeur
+                @Controller
+                public class TestController {
+
+                    // service simulé copiant Spring Boot mais on a pas besoin de ça, c'est juste un exemple
+                    StudentService studentService;
+
+                    @GET
+                    @UrlMapping("/test")
+                    public void testMethod(@Session Map<String, Object> session, Integer id) {
+                        // simuler une méthode pour trouver un objet via son id
+                        Student st = studentService.findById(id);
+                        if(st != null) {
+                            // persistence dans session
+                            session.put("studen", st);
+                        }
+                    }
+                }
+
+
 package com.monframework;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
@@ -17,18 +50,14 @@ import com.monframework.annotations.JsonResponse;
 import com.monframework.annotations.FileUpload;
 import com.monframework.models.UploadedFile;
 import com.monframework.exceptions.MethodNotAllowedException;
-import com.monframework.annotations.Session; // Importez la nouvelle annotation
 
 import java.util.ArrayList;
-import java.util.Enumeration; // Ajouté pour HttpSession
 import java.util.HashMap;
-import java.util.HashSet; // Ajouté pour initialKeys
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Collection;
 import java.util.regex.Matcher;
-import jakarta.servlet.http.HttpSession; // Ajouté pour HttpSession
 
 @MultipartConfig(
     fileSizeThreshold = 1024 * 1024 * 2,  // 2MB
@@ -182,12 +211,11 @@ public class FrontServlet extends HttpServlet {
             } else {
                 Parameter[] parameters = method.getParameters();
 
-                boolean hasRequestMap = false;
-                int requestMapIndex = -1;
-                boolean hasSessionMap = false;
-                int sessionMapIndex = -1;
-                boolean hasModelObject = false;
-                int modelIndex = -1;
+                boolean hasMapParameter = false;
+                int mapParamIndex = -1;
+                boolean hasModelObjectParameter = false;
+                int modelParamIndex = -1;
+                Class<?> modelClass = null;
 
                 // Détection des types spéciaux de paramètres
                 for (int i = 0; i < parameters.length; i++) {
@@ -195,208 +223,44 @@ public class FrontServlet extends HttpServlet {
 
                     if (Map.class.isAssignableFrom(param.getType())
                             && "java.util.Map<java.lang.String, java.lang.Object>".equals(param.getParameterizedType().getTypeName())) {
-                        if (param.isAnnotationPresent(Session.class)) {
-                            if (hasSessionMap) {
-                                throw new ServletException("Un seul paramètre @Session autorisé par méthode.");
-                            }
-                            hasSessionMap = true;
-                            sessionMapIndex = i;
-                        } else {
-                            if (hasRequestMap) {
-                                throw new ServletException("Un seul paramètre Map<String, Object> (request) autorisé par méthode.");
-                            }
-                            hasRequestMap = true;
-                            requestMapIndex = i;
-                        }
+                        hasMapParameter = true;
+                        mapParamIndex = i;
                     } else if (isModelClass(param.getType())) {
-                        if (hasModelObject) {
+                        if (hasModelObjectParameter) {
                             throw new ServletException("Un seul paramètre objet modèle autorisé par méthode.");
                         }
-                        hasModelObject = true;
-                        modelIndex = i;
+                        hasModelObjectParameter = true;
+                        modelParamIndex = i;
+                        modelClass = param.getType();
                     }
                 }
 
-                // Construction des arguments
                 Object[] args = new Object[parameters.length];
-                Set<String> initialSessionKeys = null;
 
-                for (int i = 0; i < parameters.length; i++) {
-                    Parameter param = parameters[i];
-                    Class<?> type = param.getType();
-
-                    if (param.isAnnotationPresent(Session.class)) {
-                        // Gestion @Session Map<String, Object>
-                        Map<String, Object> sessionMap = new HashMap<>();
-                        HttpSession session = req.getSession(true); // Créer la session si elle n'existe pas
-                        Enumeration<String> attrNames = session.getAttributeNames();
-                        initialSessionKeys = new HashSet<>();
-                        while (attrNames.hasMoreElements()) {
-                            String name = attrNames.nextElement();
-                            Object val = session.getAttribute(name);
-                            sessionMap.put(name, val);
-                            initialSessionKeys.add(name);
-                        }
-                        args[i] = sessionMap;
-                        continue;
-                    } else if (Map.class.isAssignableFrom(type)
-                            && "java.util.Map<java.lang.String, java.lang.Object>".equals(param.getParameterizedType().getTypeName())) {
-                        // Gestion Map<String, Object> pour request data
-                        Map<String, Object> requestData = new HashMap<>();
-                        for (Map.Entry<String, String[]> entry : parameterMap.entrySet()) {
-                            String key = entry.getKey();
-                            String[] values = entry.getValue();
-                            requestData.put(key, values.length == 1 ? values[0] : values);
-                        }
-                        if (routeParams != null) {
-                            requestData.putAll(routeParams);
-                        }
-                        args[i] = requestData;
-                        continue;
-                    } else if (isModelClass(type)) {
-                        // Gestion binding objet modèle
-                        args[i] = buildModelObject(type, parameterMap, routeParams);
-                        continue;
-                    } else {
-                        // Gestion paramètres classiques (@RequestParam, @PathVariable, @FileUpload, etc.)
-                        String paramName = param.getName();
-
-                        if (type == HttpServletRequest.class) {
-                            args[i] = req;
-                            continue;
-                        }
-
-                        if (type == HttpServletResponse.class) {
-                            args[i] = resp;
-                            continue;
-                        }
-
-                        // Gestion UploadedFile unique
-                        if (type == UploadedFile.class) {
-                            FileUpload fileAnnotation = param.getAnnotation(FileUpload.class);
-                            String fieldName = (fileAnnotation != null && !fileAnnotation.value().isEmpty())
-                                    ? fileAnnotation.value()
-                                    : paramName;
-
-                            Part part = req.getPart(fieldName);
-
-                            if (part == null || part.getSize() == 0) {
-                                if (fileAnnotation != null && fileAnnotation.required()) {
-                                    throw new ServletException("Fichier requis manquant : " + fieldName);
-                                }
-                                args[i] = null;
-                            } else {
-                                args[i] = new UploadedFile(part);
-                            }
-                            continue;
-                        }
-
-                        // Gestion List<UploadedFile>
-                        if (type == List.class && param.getParameterizedType().getTypeName().contains("UploadedFile")) {
-                            FileUpload fileAnnotation = param.getAnnotation(FileUpload.class);
-                            String fieldName = (fileAnnotation != null && !fileAnnotation.value().isEmpty())
-                                    ? fileAnnotation.value()
-                                    : paramName;
-
-                            Collection<Part> parts = req.getParts();
-                            List<UploadedFile> files = new ArrayList<>();
-
-                            for (Part part : parts) {
-                                if (part.getName().equals(fieldName) && part.getSize() > 0) {
-                                    files.add(new UploadedFile(part));
-                                }
-                            }
-
-                            if (files.isEmpty() && fileAnnotation != null && fileAnnotation.required()) {
-                                throw new ServletException("Fichiers requis manquants : " + fieldName);
-                            }
-
-                            args[i] = files;
-                            continue;
-                        }
-
-                        // Logique pour paramètres scalaires
-                        String fieldName = paramName;
-                        boolean required = true;
-
-                        com.monframework.annotations.RequestParam rp =
-                                param.getAnnotation(com.monframework.annotations.RequestParam.class);
-                        if (rp != null) {
-                            fieldName = rp.value().isEmpty() ? paramName : rp.value();
-                            required = rp.required();
-                        }
-
-                        String valueStr = null;
-                        String lookup = paramName;
-                        if (urlParamNames != null && i < urlParamNames.size()) {
-                            lookup = urlParamNames.get(i);
-                        } else {
-                            lookup = fieldName;
-                        }
-
-                        if (routeParams != null && routeParams.containsKey(lookup)) {
-                            valueStr = routeParams.get(lookup);
-                        } else if (parameterMap.containsKey(fieldName)) {
-                            valueStr = parameterMap.get(fieldName)[0];
-                        }
-
-                        if (required && (valueStr == null || valueStr.isEmpty())) {
-                            throw new ServletException("Paramètre requis manquant : " + fieldName);
-                        }
-
-                        if (valueStr == null) {
-                            if (type.isPrimitive()) {
-                                throw new ServletException("Paramètre primitif non initialisé : " + fieldName);
-                            }
-                            args[i] = null;
-                            continue;
-                        }
-
-                        Object value = null;
-                        String typeName = type.getSimpleName();
-                        switch (typeName) {
-                            case "int":
-                            case "Integer":
-                                value = Integer.parseInt(valueStr);
-                                break;
-                            case "long":
-                            case "Long":
-                                value = Long.parseLong(valueStr);
-                                break;
-                            case "double":
-                            case "Double":
-                                value = Double.parseDouble(valueStr);
-                                break;
-                            case "boolean":
-                            case "Boolean":
-                                value = Boolean.parseBoolean(valueStr);
-                                break;
-                            default:
-                                value = valueStr;
-                        }
-
-                        args[i] = value;
-                        req.setAttribute(fieldName, value);
+                if (hasMapParameter) {
+                    // === CAS 1 : Map<String, Object> ===
+                    Map<String, Object> requestData = new HashMap<>();
+                    for (Map.Entry<String, String[]> entry : parameterMap.entrySet()) {
+                        String key = entry.getKey();
+                        String[] values = entry.getValue();
+                        requestData.put(key, values.length == 1 ? values[0] : values);
                     }
-                }
-
-                // Invocation de la méthode
-                result = method.invoke(controller, args);
-
-                // Persistance des changements de session si @Session présent
-                if (hasSessionMap) {
-                    Map<String, Object> modifiedMap = (Map<String, Object>) args[sessionMapIndex];
-                    HttpSession session = req.getSession();
-                    if (initialSessionKeys != null) {
-                        for (String key : initialSessionKeys) {
-                            if (!modifiedMap.containsKey(key)) {
-                                session.removeAttribute(key);
-                            }
-                        }
+                    if (routeParams != null) {
+                        requestData.putAll(routeParams);
                     }
-                    for (Map.Entry<String, Object> entry : modifiedMap.entrySet()) {
-                        session.setAttribute(entry.getKey(), entry.getValue());
-                    }
+                    args[mapParamIndex] = requestData;
+                    result = method.invoke(controller, args);
+
+                } else if (hasModelObjectParameter) {
+                    // === CAS 2 : Binding d'objet modèle ===
+                    Object modelObject = buildModelObject(modelClass, parameterMap, routeParams);
+                    args[modelParamIndex] = modelObject;
+                    result = method.invoke(controller, args);
+
+                } else {
+                    // === CAS 3 : Paramètres classiques (@RequestParam / @PathVariable / @FileUpload) ===
+                    Object[] argsClassic = buildMethodArguments(method, req, parameterMap, routeParams, urlParamNames);
+                    result = method.invoke(controller, argsClassic);
                 }
             }
 
@@ -406,17 +270,9 @@ public class FrontServlet extends HttpServlet {
                 if (view == null || view.isEmpty()) {
                     throw new ServletException("ModelView sans vue définie");
                 }
-                
-                // Gestion des redirects
-                if (view.startsWith("redirect:")) {
-                    String redirectUrl = view.substring("redirect:".length());
-                    resp.sendRedirect(req.getContextPath() + redirectUrl);
-                } else {
-                    // Forward normal
-                    mv.getMapData().forEach(req::setAttribute);
-                    RequestDispatcher dispatcher = req.getRequestDispatcher(view);
-                    dispatcher.forward(req, resp);
-                }
+                mv.getMapData().forEach(req::setAttribute);
+                RequestDispatcher dispatcher = req.getRequestDispatcher(view);
+                dispatcher.forward(req, resp);
 
             } else if (result instanceof String str) {
                 resp.setContentType("text/html; charset=UTF-8");
@@ -455,6 +311,126 @@ public class FrontServlet extends HttpServlet {
             e.printStackTrace(out);
             out.println("</pre>");
         }
+    }
+
+    // ==================== NOUVELLE MÉTHODE POUR GÉRER LES PARAMÈTRES AVEC UPLOAD ====================
+    private Object[] buildMethodArguments(Method method, HttpServletRequest req, 
+                                         Map<String, String[]> parameterMap, 
+                                         Map<String, String> routeParams, 
+                                         List<String> urlParamNames) 
+            throws Exception {
+        
+        Parameter[] parameters = method.getParameters();
+        Object[] args = new Object[parameters.length];
+
+        for (int i = 0; i < parameters.length; i++) {
+            Parameter param = parameters[i];
+            Class<?> type = param.getType();
+            String paramName = param.getName();
+
+            // === GESTION DE HttpServletRequest ===
+            if (type == HttpServletRequest.class) {
+                args[i] = req;
+                continue;
+            }
+
+            // === GESTION DE HttpServletResponse ===
+            if (type == HttpServletResponse.class) {
+                // Note: vous devrez passer resp en paramètre à buildMethodArguments
+                // Pour l'instant on le laisse null, à implémenter si besoin
+                args[i] = null;
+                continue;
+            }
+
+            // === GESTION DES FICHIERS UPLOADÉS (UN SEUL) ===
+            if (type == UploadedFile.class) {
+                FileUpload fileAnnotation = param.getAnnotation(FileUpload.class);
+                String fieldName = (fileAnnotation != null && !fileAnnotation.value().isEmpty()) 
+                                   ? fileAnnotation.value() 
+                                   : paramName;
+                
+                Part part = req.getPart(fieldName);
+                
+                if (part == null || part.getSize() == 0) {
+                    if (fileAnnotation != null && fileAnnotation.required()) {
+                        throw new ServletException("Fichier requis manquant : " + fieldName);
+                    }
+                    args[i] = null;
+                } else {
+                    args[i] = new UploadedFile(part);
+                }
+                continue;
+            }
+
+            // === GESTION DES LISTES DE FICHIERS (UPLOAD MULTIPLE) ===
+            if (type == List.class && param.getParameterizedType().getTypeName()
+                    .contains("UploadedFile")) {
+                FileUpload fileAnnotation = param.getAnnotation(FileUpload.class);
+                String fieldName = (fileAnnotation != null && !fileAnnotation.value().isEmpty()) 
+                                   ? fileAnnotation.value() 
+                                   : paramName;
+                
+                Collection<Part> parts = req.getParts();
+                List<UploadedFile> files = new ArrayList<>();
+                
+                for (Part part : parts) {
+                    if (part.getName().equals(fieldName) && part.getSize() > 0) {
+                        files.add(new UploadedFile(part));
+                    }
+                }
+                
+                if (files.isEmpty() && fileAnnotation != null && fileAnnotation.required()) {
+                    throw new ServletException("Fichiers requis manquants : " + fieldName);
+                }
+                
+                args[i] = files;
+                continue;
+            }
+
+            // === LOGIQUE EXISTANTE POUR LES AUTRES PARAMÈTRES ===
+            String fieldName = paramName;
+            boolean required = true;
+
+            com.monframework.annotations.RequestParam rp = 
+                param.getAnnotation(com.monframework.annotations.RequestParam.class);
+            if (rp != null) {
+                fieldName = rp.value().isEmpty() ? paramName : rp.value();
+                required = rp.required();
+            }
+
+            String valueStr = null;
+            if (parameterMap.containsKey(fieldName)) {
+                valueStr = parameterMap.get(fieldName)[0];
+            } else if (routeParams != null) {
+                String lookup = urlParamNames.size() > i ? urlParamNames.get(i) : fieldName;
+                valueStr = routeParams.get(lookup);
+            }
+
+            if (required && (valueStr == null || valueStr.isEmpty())) {
+                throw new ServletException("Paramètre requis manquant : " + fieldName);
+            }
+
+            if (valueStr == null) {
+                if (type.isPrimitive()) {
+                    throw new ServletException("Paramètre primitif non initialisé : " + fieldName);
+                }
+                args[i] = null;
+                continue;
+            }
+
+            Object value = switch (type.getSimpleName()) {
+                case "int", "Integer" -> Integer.parseInt(valueStr);
+                case "long", "Long" -> Long.parseLong(valueStr);
+                case "double", "Double" -> Double.parseDouble(valueStr);
+                case "boolean", "Boolean" -> Boolean.parseBoolean(valueStr);
+                default -> valueStr;
+            };
+
+            args[i] = value;
+            req.setAttribute(fieldName, value);
+        }
+
+        return args;
     }
 
     // ==================== MÉTHODES UTILITAIRES POUR LE BINDING D'OBJETS MODÈLE ====================
@@ -776,5 +752,40 @@ public class FrontServlet extends HttpServlet {
                 .replace("\n", "\\n")
                 .replace("\r", "\\r")
                 .replace("\t", "\\t");
+    }
+
+    private String listToJson(List<?> list) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < list.size(); i++) {
+            if (i > 0) {
+                sb.append(",");
+            }
+            Object item = list.get(i);
+            if (item instanceof String) {
+                sb.append("\"").append(escapeJsonString(item.toString())).append("\"");
+            } else {
+                sb.append(toJson(item));
+            }
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    private String arrayToJson(Object array) {
+        int length = java.lang.reflect.Array.getLength(array);
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < length; i++) {
+            if (i > 0) {
+                sb.append(",");
+            }
+            Object item = java.lang.reflect.Array.get(array, i);
+            if (item instanceof String) {
+                sb.append("\"").append(escapeJsonString(item.toString())).append("\"");
+            } else {
+                sb.append(toJson(item));
+            }
+        }
+        sb.append("]");
+        return sb.toString();
     }
 }

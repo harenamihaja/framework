@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sprint 11 - Menu</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            padding: 50px;
+            max-width: 700px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 5px;
+            font-size: 36px;
+            text-align: center;
+        }
+        
+        .version {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: #f9f9f9;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .card h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        
+        .card p {
+            color: #666;
+            font-size: 13px;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+        
+        .card-features {
+            list-style: none;
+            margin: 10px 0;
+        }
+        
+        .card-features li {
+            color: #666;
+            font-size: 13px;
+            padding: 5px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+        
+        .card-features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #4caf50;
+            font-weight: bold;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+        
+        a.btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+            border: 1px solid #ddd;
+        }
+        
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        
+        .status {
+            background: #e8f5e9;
+            border: 1px solid #4caf50;
+            padding: 15px;
+            border-radius: 5px;
+            color: #2e7d32;
+            margin-top: 30px;
+            padding-left: 40px;
+            position: relative;
+        }
+        
+        .status:before {
+            content: "✓";
+            position: absolute;
+            left: 15px;
+            font-size: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Sprint 11</h1>
+        <p class="version">Session Management avec @Session</p>
+        
+        <div class="card">
+            <h3>📌 Session avec @Session</h3>
+            <p>
+                Vous avez implémenté l'annotation <strong>@Session</strong> qui permet d'accéder à la session HTTP 
+                via un <strong>Map&lt;String, Object&gt;</strong> dans vos méthodes de contrôleur.
+            </p>
+            <ul class="card-features">
+                <li>Copie de HttpSession vers Map avant l'invocation</li>
+                <li>Copie de Map vers HttpSession après l'invocation</li>
+                <li>Support des redirects avec pattern "redirect:/url"</li>
+                <li>Exemple complet avec panier de produits</li>
+            </ul>
+            <div class="button-group">
+                <a href="session-test.html" class="btn btn-primary">Voir la démo</a>
+                <a href="SPRINT11_SESSION_README.md" class="btn btn-secondary">Lire la doc complète</a>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3>⚙️ Architecture</h3>
+            <p>
+                Le système fonctionne avec 3 composants principaux:
+            </p>
+            <ul class="card-features">
+                <li><strong>FrontServlet</strong> - Gère la copie de session bidirectionnelle</li>
+                <li><strong>SessionController</strong> - Exemple avec panier produits</li>
+                <li><strong>Pages JSP</strong> - Interface pour tester la sessionBEDécision</li>
+            </ul>
+        </div>
+        
+        <div class="card">
+            <h3>🛒 Exemple d'utilisation</h3>
+            <div style="background: #222; color: #0f0; padding: 12px; border-radius: 4px; font-family: 'Courier New'; font-size: 12px; overflow-x: auto;">
+@UrlMapping(url = "/session/ajouter")<br>
+public ModelView ajouter(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;@RequestParam("nom") String nom,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<strong>@Session Map&lt;String, Object&gt; session</strong>) {<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;List&lt;String&gt; panier = <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(List) session.getOrDefault("panier",<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new ArrayList&lt;&gt;());<br>
+&nbsp;&nbsp;&nbsp;&nbsp;panier.add(nom);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<strong>session.put("panier", panier);</strong><br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;return mv;<br>
+}
+            </div>
+        </div>
+        
+        <div class="status">
+            ✅ Implémentation complète et fonctionnelle
+        </div>
+    </div>
+</body>
+</html>

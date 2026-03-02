@@ -1,0 +1,45 @@
+sprint 11:
+    - Session:
+        -on peut annoter un argument de fonction depuis une méthode d'une classe Controller avec
+        l'annotation @Session, l'argument doit impérativement
+        être de type Map<String, Object>, on peut accéder aux variables de HttpSession depuis ce Map
+        -dans FrontServlet lors de l'appel de la fonction (via reflect) si on a une variable de session,
+        on copie HttpSession dans un Map puis on donne ça en argument
+        a la méthode, puis après avoir executé la méthode on passe le contenu de la Map qu'on a
+        copié ensuite à HttpSession pour persister le changement
+
+        Schema:
+            -coté développeur
+                @Controller
+                public class TestController {
+
+                    // service simulé copiant Spring Boot mais on a pas besoin de ça, c'est juste un exemple
+                    StudentService studentService;
+
+                    @GET
+                    @UrlMapping("/test")
+                    public void testMethod(@Session Map<String, Object> session, Integer id) {
+                        // simuler une méthode pour trouver un objet via son id
+                        Student st = studentService.findById(id);
+                        if(st != null) {
+                            // persistence dans session
+                            session.put("studen", st);
+                        }
+                    }
+                }
+
+sprint 11-bis:
+    -annoter les methodes d'actions des controlleurs avec des annotations de role:
+        -@Role(String... role) : seul les utilisateurs au role spécifié peuvent appeler la méthode
+        -@Authorized : l'utilisateur doit être connecté
+        -@Anonym : n'importe qui peut appeler la méthode
+    -on declare les clés associées aux annotations de role dans un fichier xml puis au moment d'invoquer la requete 
+    on verifie dans la session si il existe une valeur avec la clé du role dont la méthode d'action est annotée
+        <?xml version="1.0" encoding="UTF-8"?>
+        <security>
+            <keys>
+                <role>userRole</role>
+                <authorized>user</authorized>
+                <anonym>anon</anonym>
+            </keys>
+        </security>

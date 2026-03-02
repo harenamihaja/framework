@@ -35,7 +35,7 @@ import jakarta.servlet.http.HttpSession; // Ajouté pour HttpSession
     maxFileSize = 1024 * 1024 * 10,       // 10MB
     maxRequestSize = 1024 * 1024 * 50     // 50MB
 )
-public class FrontServlet extends HttpServlet {
+public class sprint11 extends HttpServlet {
 
     private Map<String, List<Route>> routeMap = new HashMap<>();
     private static final String UPLOAD_DIR = "uploads";
@@ -406,17 +406,9 @@ public class FrontServlet extends HttpServlet {
                 if (view == null || view.isEmpty()) {
                     throw new ServletException("ModelView sans vue définie");
                 }
-                
-                // Gestion des redirects
-                if (view.startsWith("redirect:")) {
-                    String redirectUrl = view.substring("redirect:".length());
-                    resp.sendRedirect(req.getContextPath() + redirectUrl);
-                } else {
-                    // Forward normal
-                    mv.getMapData().forEach(req::setAttribute);
-                    RequestDispatcher dispatcher = req.getRequestDispatcher(view);
-                    dispatcher.forward(req, resp);
-                }
+                mv.getMapData().forEach(req::setAttribute);
+                RequestDispatcher dispatcher = req.getRequestDispatcher(view);
+                dispatcher.forward(req, resp);
 
             } else if (result instanceof String str) {
                 resp.setContentType("text/html; charset=UTF-8");
