@@ -15,6 +15,9 @@ import com.monframework.models.ModelView;
 import com.monframework.scanner.ControllerScanner;
 import com.monframework.annotations.JsonResponse;
 import com.monframework.annotations.FileUpload;
+import com.monframework.annotations.Role;
+import com.monframework.annotations.Authorized;
+import com.monframework.annotations.Anonym;
 import com.monframework.models.UploadedFile;
 import com.monframework.exceptions.MethodNotAllowedException;
 import com.monframework.annotations.Session; // Importez la nouvelle annotation
@@ -38,6 +41,8 @@ import jakarta.servlet.http.HttpSession; // Ajouté pour HttpSession
 public class FrontServlet extends HttpServlet {
 
     private Map<String, List<Route>> routeMap = new HashMap<>();
+    // security keys loaded from /WEB-INF/security.xml
+    private Map<String, String> securityKeys = new HashMap<>();
     private static final String UPLOAD_DIR = "uploads";
 
     
@@ -54,6 +59,13 @@ public class FrontServlet extends HttpServlet {
 
         List<Route> routes = ControllerScanner.getRoutes(controllerPackage);
 
+        // Load security keys from /WEB-INF/security.xml if present
+        try {
+            loadSecurityKeys();
+        } catch (Exception e) {
+            System.out.println("Warning: impossible de charger security.xml : " + e.getMessage());
+        }
+
         for (Route route : routes) {
             String url = route.getUrl();
             routeMap.computeIfAbsent(url, k -> new ArrayList<>()).add(route);
@@ -64,6 +76,117 @@ public class FrontServlet extends HttpServlet {
         }
 
         System.out.println("=== " + routes.size() + " route(s) trouvée(s) ===");
+    }
+
+    private void loadSecurityKeys() throws Exception {
+        jakarta.servlet.ServletContext ctx = getServletContext();
+        // First try dedicated security.xml
+        try (java.io.InputStream is = ctx.getResourceAsStream("/WEB-INF/security.xml")) {
+            if (is != null) {
+                parseSecurityStream(is);
+                return;
+            }
+        }
+
+        // If not present, attempt to extract <security> block from WEB-INF/web.xml
+        try (java.io.InputStream is = ctx.getResourceAsStream("/WEB-INF/web.xml")) {
+            if (is == null) {
+                System.out.println("No web.xml found to read security keys.");
+                return;
+            }
+            String xml = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            int start = xml.indexOf("<security>");
+            int end = xml.indexOf("</security>");
+            if (start >= 0 && end > start) {
+                String sec = xml.substring(start, end + "</security>".length());
+                try (java.io.InputStream sis = new java.io.ByteArrayInputStream(sec.getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
+                    parseSecurityStream(sis);
+                }
+            } else {
+                System.out.println("No <security> block found in web.xml");
+            }
+        }
+    }
+
+    private void parseSecurityStream(java.io.InputStream is) throws Exception {
+        javax.xml.parsers.DocumentBuilderFactory dbf = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+        javax.xml.parsers.DocumentBuilder db = dbf.newDocumentBuilder();
+        org.w3c.dom.Document doc = db.parse(is);
+        org.w3c.dom.Element root = doc.getDocumentElement();
+        org.w3c.dom.NodeList keys = root.getElementsByTagName("keys");
+        if (keys.getLength() > 0) {
+            org.w3c.dom.Node keysNode = keys.item(0);
+            org.w3c.dom.NodeList children = keysNode.getChildNodes();
+            for (int i = 0; i < children.getLength(); i++) {
+                org.w3c.dom.Node n = children.item(i);
+                if (n.getNodeType() == org.w3c.dom.Node.ELEMENT_NODE) {
+                    String name = n.getNodeName();
+                    String value = n.getTextContent().trim();
+                    if (!value.isEmpty()) {
+                        securityKeys.put(name, value);
+                        System.out.println("Security key loaded: " + name + " -> " + value);
+                    }
+                }
+            }
+        }
+    }
+
+    private boolean checkAuthorization(Method method, HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        // Anonym allowed to anyone
+        if (method.isAnnotationPresent(Anonym.class)) {
+            return true;
+        }
+
+        HttpSession session = req.getSession(false);
+
+        // Authorized: session must contain the configured authorized key
+        if (method.isAnnotationPresent(Authorized.class)) {
+            String key = securityKeys.get("authorized");
+            if (key == null) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Security key 'authorized' not configured.");
+                return false;
+            }
+            if (session == null || session.getAttribute(key) == null) {
+                resp.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                resp.setContentType("text/html; charset=UTF-8");
+                resp.getWriter().println("<h1>403 - Forbidden</h1><p>Accès réservé aux utilisateurs authentifiés.</p>");
+                return false;
+            }
+            return true;
+        }
+
+        // Role-based: check session attribute defined by security key 'role' contains one of the roles
+        if (method.isAnnotationPresent(Role.class)) {
+            String sessionKey = securityKeys.get("role");
+            if (sessionKey == null) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Security key 'role' not configured.");
+                return false;
+            }
+            if (session == null) {
+                resp.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                resp.getWriter().println("<h1>403 - Forbidden</h1><p>Accès refusé (session manquante).</p>");
+                return false;
+            }
+            Object val = session.getAttribute(sessionKey);
+            if (val == null) {
+                resp.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                resp.getWriter().println("<h1>403 - Forbidden</h1><p>Accès refusé (rôle absent).</p>");
+                return false;
+            }
+            String roleValue = val.toString();
+            Role roleAnno = method.getAnnotation(Role.class);
+            for (String allowed : roleAnno.value()) {
+                if (allowed.equals(roleValue)) {
+                    return true;
+                }
+            }
+            resp.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            resp.getWriter().println("<h1>403 - Forbidden</h1><p>Accès refusé (rôle insuffisant).</p>");
+            return false;
+        }
+
+        // Default: allow
+        return true;
     }
 
     @Override
@@ -169,6 +292,11 @@ public class FrontServlet extends HttpServlet {
             Object controller = route.getController().getDeclaredConstructor().newInstance();
             Method method = route.getMethod();
 
+            // Authorization check before invoking controller method
+            if (!checkAuthorization(method, req, resp)) {
+                return; // checkAuthorization already sent error/redirect
+            }
+
             Map<String, String[]> parameterMap = req.getParameterMap();
             @SuppressWarnings("unchecked")
             Map<String, String> routeParams = (Map<String, String>) req.getAttribute("routeParams");
@@ -268,6 +396,11 @@ public class FrontServlet extends HttpServlet {
 
                         if (type == HttpServletResponse.class) {
                             args[i] = resp;
+                            continue;
+                        }
+
+                        if (type == HttpSession.class) {
+                            args[i] = req.getSession(true);
                             continue;
                         }
 

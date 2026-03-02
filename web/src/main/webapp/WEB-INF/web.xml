@@ -25,7 +25,12 @@
 
    
 
-     
+    <security>
+        <keys>
+            <role>userRole</role>
+            <authorized>user</authorized>
+            <anonym>anon</anonym>
+        </keys>
+    </security>
 
-     
 </web-app>
