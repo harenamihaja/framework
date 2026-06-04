@@ -40,7 +40,6 @@ Le script principal compile le framework, compile la webapp, genere le WAR, puis
 2) Executer le script :
 
 ```bat
-cd /d e:\ITU\s5\MrNaina\sprint\framework
 .\deploy.bat
 ```
 
